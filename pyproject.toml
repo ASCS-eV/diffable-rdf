@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "diffable-rdf"
+dynamic = ["version"]
+description = "Deterministic, diff-stable serialization for rdflib graphs (RDFC-1.0 + Weisfeiler-Lehman blank-node hashing + idiomatic Turtle)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "ASCS e.V." }]
+keywords = [
+    "rdf",
+    "rdflib",
+    "turtle",
+    "canonicalization",
+    "rdfc-1.0",
+    "deterministic",
+    "diff",
+    "serialization",
+    "json-ld",
+    "pyoxigraph",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup",
+    "Typing :: Typed",
+]
+dependencies = [
+    "rdflib>=6.0",
+    "pyoxigraph>=0.4.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ASCS-eV/diffable-rdf"
+Repository = "https://github.com/ASCS-eV/diffable-rdf"
+Issues = "https://github.com/ASCS-eV/diffable-rdf/issues"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.hatch.version]
+path = "src/diffable_rdf/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/diffable_rdf"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/diffable_rdf",
+    "tests",
+    "README.md",
+    "LICENSE",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,51 @@
+name: publish
+
+# Publishes to PyPI via a Trusted Publisher (OIDC) when a GitHub Release is
+# published. No API token is needed; the `pypi` environment gates the release.
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: |
+          uv sync --group dev
+          uv run --frozen pytest -q
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Check metadata
+        run: uv run --with twine python -m twine check dist/*
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  pypi-publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # required for Trusted Publisher (OIDC)
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
