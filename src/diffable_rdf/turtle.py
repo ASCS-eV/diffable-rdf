@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+from rdflib import RDF  # noqa: E402  (kept beside the serializer that uses it)
+from rdflib.plugins.serializers.turtle import TurtleSerializer  # noqa: E402
+
+
 def _wl_signatures(
     quads: list,
     iterations: int = 4,
@@ -117,6 +121,58 @@ def _wl_signatures(
     return hash_map
 
 
+
+
+class _SharingAwareTurtleSerializer(TurtleSerializer):
+    """Turtle serializer that only uses ``( … )`` for lists nothing else points into.
+
+    rdflib's :meth:`isValidList` checks that every cell of an ``rdf:List`` carries exactly
+    two predicates, but not how many statements point *into* the chain. When a cell is
+    referenced from more than one place, the inline collection form consumes it and the other
+    reference is left dangling, with no ``rdf:first``/``rdf:rest`` of its own::
+
+        _:tail rdf:first "b" ; rdf:rest rdf:nil .
+        _:l1   rdf:first "a" ; rdf:rest _:tail .
+        ex:s1 sh:in _:l1 .
+        ex:s2 sh:in _:tail .
+
+    serialized as::
+
+        ex:s1 sh:in ( "a" "b" ) .
+        ex:s2 sh:in _:tail .          # _:tail is never defined -> the list is lost
+
+    A shared *head* is corrupted differently: the collection is written inline at every
+    reference, so re-parsing yields one private copy per reference and the triple count grows.
+    Either way the output does not round-trip, which defeats the point of a canonical form.
+
+    Requiring that every cell in the chain has exactly one inbound reference keeps the
+    readable ``( … )`` form for the overwhelmingly common private list, and falls back to
+    explicit ``rdf:first``/``rdf:rest`` statements exactly where sharing makes it unsafe.
+    """
+
+    def isValidList(self, l_: "Node") -> bool:
+        if not super().isValidList(l_):
+            return False
+        node = l_
+        while node and node != RDF.nil:
+            # A cell of a private list is pointed at once: by the statement that introduces
+            # the list, or by its predecessor's rdf:rest. More than that means sharing.
+            if sum(1 for _ in self.store.subject_predicates(node)) > 1:
+                return False
+            node = self.store.value(node, RDF.rest)
+        return True
+
+
+class _NoCollectionTurtleSerializer(TurtleSerializer):
+    """Turtle serializer that never uses ``( … )`` collection syntax.
+
+    The fallback for graphs where the inline form cannot represent the collections faithfully.
+    Explicit ``rdf:first``/``rdf:rest`` statements are always correct, if less readable, so this
+    guarantees a round-trip at the cost of verbosity - and only for the graphs that need it.
+    """
+
+    def isValidList(self, l_: "Node") -> bool:
+        return False
 
 
 def deterministic_turtle(graph: "RdfGraph") -> str:
@@ -247,7 +303,35 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
 
     # rdflib's Turtle serializer always emits a trailing double newline;
     # normalize to a single newline for consistent file endings.
-    return result_graph.serialize(format="turtle").rstrip("\n") + "\n"
+    import io
+
+    from rdflib.compare import isomorphic
+
+    def _render(serializer_class) -> str:
+        buffer = io.BytesIO()
+        serializer_class(result_graph).serialize(buffer, encoding="utf-8")
+        return buffer.getvalue().decode("utf-8").rstrip("\n") + "\n"
+
+    def _round_trips(text: str) -> bool:
+        reparsed = Graph(bind_namespaces="none")
+        reparsed.parse(data=text, format="turtle")
+        return len(reparsed) == len(result_graph) and isomorphic(reparsed, result_graph)
+
+    # A canonical form that does not round-trip is worse than none: it silently rewrites the
+    # graph. rdflib decides where to use inline ``( … )`` collection syntax with a heuristic
+    # that does not account for statements pointing into a collection, so for some graphs the
+    # inline form detaches cells or duplicates them. Verify, and fall back to explicit
+    # rdf:first/rdf:rest statements - always faithful - for the graphs where it does.
+    text = _render(_SharingAwareTurtleSerializer)
+    if not _round_trips(text):
+        text = _render(_NoCollectionTurtleSerializer)
+        if not _round_trips(text):
+            raise ValueError(
+                "canonical serialization does not round-trip even without collection syntax; "
+                f"{len(result_graph)} triples in. This is a bug in diffable-rdf: please report "
+                "it with the input graph."
+            )
+    return text
 
 
 
