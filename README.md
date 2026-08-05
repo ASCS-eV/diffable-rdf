@@ -21,8 +21,30 @@ with a standards-based pipeline:
 3. **Idiomatic rdflib re-serialization** — inline blank nodes (`[ … ]`),
    collection syntax (`( … )`), and filtered prefixes (only prefixes actually
    used are declared).
+4. **Verified round-trip** — the rendered Turtle is re-parsed and required to be
+   isomorphic to the input before it is returned.
 
 All triples are preserved; only syntactic form changes.
+
+### Why step 4 exists
+
+Turtle's compact collection syntax, `( … )`, can only express a list whose tail
+is referenced once. Canonicalization readily produces graphs where several lists
+share a tail — OWL ontologies do this routinely through `owl:unionOf`,
+`owl:oneOf`, and the `sh:in` lists derived from them — and for those, the compact
+form silently drops triples or restates a shared tail under a fresh blank node.
+The output parses cleanly and looks plausible, which is what makes it dangerous
+([#1](https://github.com/ASCS-eV/diffable-rdf/issues/1)).
+
+So `deterministic_turtle` checks its own work. When the compact form does not
+round-trip, it falls back to stating list structure explicitly with
+`rdf:first`/`rdf:rest`, which is always faithful. If neither form round-trips it
+raises rather than returning a lossy result — a canonical form that silently
+rewrites the graph is worse than none.
+
+In practice this means output is idiomatic for almost every graph, and slightly
+more verbose for the ones where idiomatic would be wrong. Consumers do not need
+to do anything: the guarantee is that what comes out says what went in.
 
 ## Install
 
@@ -63,6 +85,25 @@ well_known_prefix_map()                    # namespace IRI -> standard prefix na
 | `canonicalize_rdf_graph(graph, output_format="turtle") -> str` | RDFC-1.0 canonical serialization (with rdflib fallback for non-standard RDF). |
 | `deterministic_json(obj, indent=3, preserve_list_order_keys=None) -> str` | Recursively sorted JSON; preserves JSON-LD ordered keys (`@context`, `@list`, …). |
 | `well_known_prefix_map() -> dict[str, str]` | rdflib's curated namespace→prefix bindings. |
+
+## Guarantees, and how they are tested
+
+Four properties are asserted over seeded pseudo-random graphs and over hand-built
+arrangements of shared collections, in `tests/test_canonicalization_properties.py`:
+
+| | Property |
+|---|---|
+| P1 | **Lossless** — the output parses back to a graph isomorphic to the input |
+| P2 | **Idempotent** — canonicalizing the output reproduces it byte-for-byte |
+| P3 | **Label-independent** — renaming blank nodes does not change the output |
+| P4 | **Order-independent** — shuffling input triples does not change the output |
+
+Plus checks that no `sh:in`-style list reference dangles, that list cell counts
+survive, and that ten repeated passes produce no byte drift. Comparison is done
+under RDF 1.1 literal identity, so `"a"^^xsd:string` and `"a"` are treated as the
+same term rather than as a spurious difference.
+
+The whole suite runs on Python 3.10 through 3.13.
 
 ## Provenance
 
