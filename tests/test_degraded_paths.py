@@ -266,3 +266,146 @@ def test_canonicalize_rdf_graph_is_deterministic_across_processes(output_format:
         for _ in range(3)
     }
     assert len(runs) == 1, f"{output_format} is not reproducible across processes"
+
+
+def _chain_graph(chains: int = 20, depth: int = 4) -> Graph:
+    """Blank-node chains shaped like the OWL restrictions owlgen emits."""
+    g = Graph()
+    for i in range(chains):
+        prev = BNode()
+        g.add((EX[f"C{i}"], EX.subClassOf, prev))
+        for j in range(depth):
+            node = BNode()
+            g.add((prev, EX.intersectionOf, node))
+            g.add((node, EX.onProperty, EX[f"prop{j}"]))
+            prev = node
+    return g
+
+
+def test_wl_signatures_stay_bounded_under_many_iterations():
+    """Refinement must not grow signatures without bound.
+
+    Each round folds every neighbour's signature into a node's own, so
+    without the per-round hash signature length grows by roughly a factor
+    of the average degree per round (~2.7x on this shape) and exhausts
+    memory within ~10 rounds. The final label is hashed either way, so
+    label width cannot detect this — only memory can. The subprocess runs
+    under a hard address-space cap so the regression surfaces as a clean
+    failure instead of an OOM kill.
+    """
+    script = textwrap.dedent(
+        """
+        import resource
+        resource.setrlimit(resource.RLIMIT_AS, (1536 * 1024 * 1024,) * 2)
+
+        import pyoxigraph as ox
+        from rdflib import BNode, Graph, Namespace
+        from diffable_rdf import wl_blank_node_labels
+
+        EX = Namespace("http://example.org/")
+        g = Graph()
+        for i in range(20):
+            prev = BNode()
+            g.add((EX[f"C{i}"], EX.subClassOf, prev))
+            for j in range(4):
+                node = BNode()
+                g.add((prev, EX.intersectionOf, node))
+                g.add((node, EX.onProperty, EX[f"prop{j}"]))
+                prev = node
+
+        ds = ox.Dataset(ox.parse(g.serialize(format="nt"), format=ox.RdfFormat.N_TRIPLES))
+        ds.canonicalize(ox.CanonicalizationAlgorithm.RDFC_1_0)
+        quads = list(ds)
+
+        wl_blank_node_labels(quads, iterations=16)
+        print("ok")
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=300
+    )
+    assert result.returncode == 0, (
+        "WL refinement exceeded its memory budget; signatures are growing "
+        f"per round instead of staying hashed: {result.stderr[-500:]}"
+    )
+    assert result.stdout.strip() == "ok"
+
+
+def _partition(labels: dict[str, str]) -> list[tuple[str, ...]]:
+    """Recover the signature-equivalence classes from the emitted labels.
+
+    Colliding signatures are disambiguated with a ``_N`` suffix, which
+    makes the returned labels injective by construction; stripping it
+    recovers the classes WL actually distinguished.
+    """
+    groups: dict[str, set[str]] = {}
+    for node, label in labels.items():
+        groups.setdefault(label.split("_")[0], set()).add(node)
+    return sorted(tuple(sorted(group)) for group in groups.values())
+
+
+def _uniform_chain_graph(length: int) -> Graph:
+    """A chain of blank nodes joined by one repeated predicate.
+
+    Every edge carries the same IRI, so a node's identity is only fixed
+    once refinement has propagated the chain's endpoints all the way to
+    it. Separating a chain of ``length`` nodes therefore needs on the
+    order of ``length`` rounds — far more than any small fixed count.
+    """
+    g = Graph()
+    previous = BNode()
+    g.add((EX.Start, EX.head, previous))
+    for _ in range(length - 1):
+        current = BNode()
+        g.add((previous, EX.next, current))
+        previous = current
+    return g
+
+
+def test_wl_refines_to_a_fixpoint_by_default():
+    """The default must keep refining past any small fixed round count.
+
+    The graph is chosen so the fixpoint is provably out of reach of the
+    previous default of 4 rounds; otherwise this test would pass just as
+    happily against a fixed count and would not guard the behaviour at
+    all.
+    """
+    quads = _canonical_quads(_uniform_chain_graph(20))
+
+    fixpoint = _partition(wl_blank_node_labels(quads))
+    four_rounds = _partition(wl_blank_node_labels(quads, iterations=4))
+
+    assert len(fixpoint) > len(four_rounds), (
+        "the default must refine further than a fixed 4 rounds on a graph that needs more"
+    )
+    assert all(len(group) == 1 for group in fixpoint), (
+        "every node in a uniform chain is structurally unique at the fixpoint"
+    )
+
+    # Refining past the fixpoint cannot change the partition.
+    for iterations in (64, 128):
+        forced = _partition(wl_blank_node_labels(quads, iterations=iterations))
+        assert forced == fixpoint, (
+            f"partition changed after {iterations} rounds; fixpoint was not reached"
+        )
+
+
+def test_wl_fixpoint_resolves_collisions_that_few_rounds_leave_behind():
+    """Under-refining leaves nodes colliding, which leaks RDFC-1.0 numbering.
+
+    Colliding signatures are disambiguated by a counter assigned in
+    ``c14nN`` order, so nodes WL cannot yet tell apart inherit the very
+    instability WL exists to remove. The ``_N`` suffix is the visible
+    symptom, so assert on it directly.
+    """
+    quads = _canonical_quads(_uniform_chain_graph(20))
+
+    four_rounds = wl_blank_node_labels(quads, iterations=4)
+    fixpoint = wl_blank_node_labels(quads)
+
+    assert any("_" in label for label in four_rounds.values()), (
+        "4 rounds should leave this chain's middle nodes tied"
+    )
+    assert all("_" not in label for label in fixpoint.values()), (
+        "the fixpoint should separate them, so no collision counter is needed"
+    )

@@ -85,8 +85,19 @@ well_known_prefix_map()                    # namespace IRI -> standard prefix na
 | `canonicalize_rdf_graph(graph, output_format="turtle") -> str` | RDFC-1.0 canonical serialization (with rdflib fallback for non-standard RDF). |
 | `deterministic_json(obj, indent=3, preserve_list_order_keys=None) -> str` | Recursively sorted JSON; preserves JSON-LD ordered keys (`@context`, `@list`, …). |
 | `well_known_prefix_map() -> dict[str, str]` | rdflib's curated namespace→prefix bindings. |
-| `wl_blank_node_labels(quads, iterations=4) -> dict[str, str]` | Diff-stable label for each blank node, from canonical pyoxigraph quads. |
-| `wl_relabel_quads(quads, iterations=4) -> list` | The same labels, already applied to the quads. |
+| `wl_blank_node_labels(quads, iterations=None) -> dict[str, str]` | Diff-stable label for each blank node, from canonical pyoxigraph quads. |
+| `wl_relabel_quads(quads, iterations=None) -> list` | The same labels, already applied to the quads. |
+
+`iterations=None` (the default) refines until the labelling stops changing —
+the Weisfeiler-Lehman fixpoint. Stopping early leaves structurally distinct
+blank nodes sharing a signature, and those ties are broken in RDFC-1.0's
+`c14nN` order, which reintroduces exactly the instability the labels exist to
+remove. Pass an explicit integer only if you need a fixed round count.
+
+Because a node's label is derived from its whole connected blank-node
+structure, an edit *inside* one large connected structure can relabel all of
+it. Diff stability comes from isolating unrelated regions of the graph from
+each other, not from isolating parts of a single interconnected one.
 
 ### Composing with an existing pipeline
 

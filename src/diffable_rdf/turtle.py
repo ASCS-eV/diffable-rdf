@@ -58,9 +58,9 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
        each blank node's multi-hop neighbourhood.  These hashes depend
        only on predicate IRIs, literal values, and named-node IRIs —
        not on blank-node numbering — so adding or removing a triple
-       relabels only the blank nodes within roughly ``iterations`` hops
-       of the change, instead of renumbering every blank node in the
-       graph as RDFC-1.0 alone does.  Note that a blank node referenced
+       relabels only the blank nodes whose own neighbourhood changed,
+       instead of renumbering every blank node in the graph as RDFC-1.0
+       alone does.  Note that a blank node referenced
        from many subjects (a "hub") folds all of those references into
        its signature, so editing any one of them relabels the hub and
        churns the lines that reference it.
