@@ -11,6 +11,25 @@ import json
 _JSONLD_ORDERED_KEYS: frozenset[str] = frozenset({"@context", "@list", "@graph", "@set", "imports"})
 
 
+def _json_key(key: object) -> str:
+    """Return the string ``json.dumps`` will use for a dict key.
+
+    ``json.dumps`` coerces ``int``/``float``/``bool``/``None`` keys to
+    strings, so sorting must happen on that coerced form to stay both
+    total (no ``TypeError`` on mixed key types) and consistent with the
+    emitted output.
+    """
+    if isinstance(key, str):
+        return key
+    if key is None:
+        return "null"
+    if key is True:
+        return "true"
+    if key is False:
+        return "false"
+    return str(key)
+
+
 def deterministic_json(
     obj: object,
     indent: int = 3,
@@ -36,7 +55,14 @@ def deterministic_json(
 
     def _deep_sort(value: object, parent_key: str = "") -> object:
         if isinstance(value, dict):
-            return {k: _deep_sort(v, parent_key=k) for k, v in sorted(value.items())}
+            # Sort on the key's JSON-encoded name, not the raw key. json.dumps
+            # coerces non-string keys (int, float, bool, None) to strings, so
+            # sorting the raw keys would raise TypeError on any mix of types
+            # -- rejecting input that the stdlib serializes happily.
+            return {
+                k: _deep_sort(v, parent_key=k if isinstance(k, str) else "")
+                for k, v in sorted(value.items(), key=lambda kv: _json_key(kv[0]))
+            }
         if isinstance(value, list):
             sorted_items = [_deep_sort(item) for item in value]
             if parent_key in skip:
