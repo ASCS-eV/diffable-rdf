@@ -34,12 +34,15 @@ with stable blank node labels and sorted triples.
 """
 
 import io
+import json
 import logging
 import re
 
 import pyoxigraph as ox
 import rdflib
 from rdflib.compare import to_canonical_graph
+
+from .jsonld import deterministic_json
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,8 @@ _PREFIX_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfForma
 # Formats serialized as one statement per line, which rdflib does not emit
 # in a stable order; these are sorted in the degraded fallback path.
 _LINE_ORIENTED_FORMATS = frozenset({"nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"})
+# Formats whose output is JSON and can therefore be canonicalized structurally.
+_JSON_FORMATS = frozenset({"json-ld", "jsonld", "application/ld+json"})
 
 
 def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -> str:
@@ -85,7 +90,10 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
 
     Relative IRIs are preserved verbatim (not resolved against the base):
     the goal is deterministic output, and silently rewriting them would
-    mask what is really a data problem in the source graph.
+    mask what is really a data problem in the source graph.  The source
+    graph's ``base`` is deliberately not carried across either -- rdflib
+    relativizes against it by naive string prefixing, which corrupts terms
+    under a hash base (see :func:`deterministic_turtle`).
 
     :param graph: The rdflib Graph that pyoxigraph could not parse.
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
@@ -97,7 +105,6 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     # non-deterministic auto-generated ``ns1:``/``ns2:`` prefixes.
     for prefix, namespace in graph.namespace_manager.namespaces():
         canonical.namespace_manager.bind(prefix, namespace, replace=True)
-    canonical.base = graph.base
     serialized = canonical.serialize(format=output_format)
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
         lines = [line for line in serialized.splitlines() if line.strip()]
@@ -220,9 +227,16 @@ def canonicalize_rdf_graph(
             "pyoxigraph does not support format %r; falling back to rdflib serializer",
             output_format,
         )
-        # rdflib's Turtle serializer emits a trailing double newline;
-        # normalize to single newline for consistent file endings.
-        data = graph.serialize(format=output_format)
+        # A plain graph.serialize() here would leak rdflib's run-local
+        # blank-node labels, making the output non-reproducible across
+        # processes for e.g. json-ld -- exactly what this function promises
+        # not to do. Route through the deterministic fallback instead.
+        data = _deterministic_fallback_serialize(graph, output_format)
+        if output_format.lower() in _JSON_FORMATS:
+            # rdflib's JSON-LD serializer emits node objects in a
+            # set-iteration order that varies between processes; canonicalize
+            # the structure so only the content determines the bytes.
+            data = deterministic_json(json.loads(data)) + "\n"
         return data.rstrip("\n") + "\n" if data.endswith("\n") else data
 
     # 1. Transfer rdflib graph to pyoxigraph via N-Triples.
@@ -293,15 +307,17 @@ def canonicalize_rdf_graph(
             base_iri=base_iri,
         )
     except ValueError as e:
-        # pyoxigraph 0.5.x reports rejected prefix IRIs with a message that
-        # begins with "Invalid prefix" (verified empirically). Only swallow
-        # that case and retry without prefixes -- any other ValueError (e.g.
-        # an invalid base IRI, or an unrelated future serializer bug) must
-        # propagate so it surfaces as a stack trace rather than silently
-        # dropping all prefix declarations.
-        if not str(e).startswith("Invalid prefix"):
+        # pyoxigraph 0.5.x reports a rejected prefix IRI with a message that
+        # begins with "Invalid prefix", and a rejected base IRI with one that
+        # begins with "Invalid base IRI" (both verified empirically). A
+        # relative base is legal in rdflib, so both cases must degrade
+        # gracefully by retrying without them. Any *other* ValueError (an
+        # unrelated future serializer bug) must propagate so it surfaces as a
+        # stack trace rather than silently dropping all prefix declarations.
+        message = str(e)
+        if not message.startswith(("Invalid prefix", "Invalid base IRI")):
             raise
-        logger.warning("pyoxigraph rejected one or more prefix IRIs; serializing without prefix declarations")
+        logger.warning("pyoxigraph rejected the prefix or base IRIs (%s); serializing without them", message)
         result_bytes = ox.serialize(
             sorted_triples,
             format=ox_format,

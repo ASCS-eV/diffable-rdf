@@ -58,7 +58,12 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
        each blank node's multi-hop neighbourhood.  These hashes depend
        only on predicate IRIs, literal values, and named-node IRIs —
        not on blank-node numbering — so adding or removing a triple
-       only affects the identifiers of directly involved blank nodes.
+       relabels only the blank nodes within roughly ``iterations`` hops
+       of the change, instead of renumbering every blank node in the
+       graph as RDFC-1.0 alone does.  Note that a blank node referenced
+       from many subjects (a "hub") folds all of those references into
+       its signature, so editing any one of them relabels the hub and
+       churns the lines that reference it.
     3. **Hybrid rdflib re-serialization** parses the canonicalized,
        WL-hashed triples back into an rdflib ``Graph`` and serializes
        with rdflib's native Turtle writer.  This recovers idiomatic
@@ -162,9 +167,13 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
         raise TypeError(f"Unexpected pyoxigraph term type: {type(term).__name__}: {term}")
 
     result_graph = Graph(bind_namespaces="none")
-    # Carry the source graph's base IRI across; the rebuilt graph would
-    # otherwise silently drop the @base directive from the output.
-    result_graph.base = graph.base
+    # NOTE: the source graph's ``base`` is deliberately NOT carried across.
+    # rdflib relativizes IRIs against a base by naive string prefixing, which
+    # is not RFC-3986-correct for hash bases ("http://ex.org/d#") or bases
+    # without a trailing slash: "http://ex.org/d#a" is emitted as "<a>", which
+    # re-resolves to a different IRI.  Preserving the base therefore corrupts
+    # terms and trips the round-trip guard below.  Absolute IRIs are always
+    # emitted in full, which is lossless and diff-stable.
     for triple in remapped:
         result_graph.add(
             (

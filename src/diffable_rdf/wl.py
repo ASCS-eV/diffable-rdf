@@ -82,6 +82,11 @@ def wl_blank_node_labels(
         o_is_bn = isinstance(o, pyoxigraph.BlankNode)
         p_str = str(p)
 
+        # A blank node used as a graph name must be relabelled consistently
+        # with its uses as a term, otherwise one node is split into two.
+        if isinstance(q.graph_name, pyoxigraph.BlankNode):
+            bnode_ids.add(q.graph_name.value)
+
         if s_is_bn:
             bnode_ids.add(s.value)
             outgoing.setdefault(s.value, []).append((p_str, o.value if o_is_bn else str(o), o_is_bn))
@@ -153,9 +158,8 @@ def wl_relabel_quads(
     Returns
     -------
     list
-        New quads with every blank node relabelled.  The graph name of
-        each quad is preserved; triples are otherwise unchanged, so the
-        result is isomorphic to the input.
+        New quads with every blank node relabelled, including blank nodes
+        used as graph names, so the result is isomorphic to the input.
     """
     labels = wl_blank_node_labels(quads, iterations=iterations)
 
@@ -164,4 +168,7 @@ def wl_relabel_quads(
             return pyoxigraph.BlankNode(labels[term.value])
         return term
 
-    return [pyoxigraph.Quad(remap(q.subject), q.predicate, remap(q.object), q.graph_name) for q in quads]
+    return [
+        pyoxigraph.Quad(remap(q.subject), q.predicate, remap(q.object), remap(q.graph_name))
+        for q in quads
+    ]
