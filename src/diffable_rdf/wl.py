@@ -35,7 +35,7 @@ __all__ = ["wl_blank_node_labels", "wl_relabel_quads"]
 
 def wl_blank_node_labels(
     quads: list,
-    iterations: int = 4,
+    iterations: int | None = None,
 ) -> dict[str, str]:
     """Compute diff-stable blank-node labels via Weisfeiler-Lehman refinement.
 
@@ -49,10 +49,11 @@ def wl_blank_node_labels(
     ----------
     quads : list
         Canonical quads from pyoxigraph (i.e. after RDFC-1.0).
-    iterations : int
-        Number of WL refinement rounds (default 4).  More rounds
-        distinguish blank nodes that are structurally similar further
-        out in the graph, at a linear cost per round.
+    iterations : int | None
+        Number of WL refinement rounds.  The default (``None``) refines
+        until the partition stops changing (the WL fixpoint), which
+        yields the most diff-stable labelling; pass an explicit integer
+        to force exactly that many rounds.
 
     Returns
     -------
@@ -63,6 +64,15 @@ def wl_blank_node_labels(
 
     Notes
     -----
+    Each round's signature is hashed before being fed into the next
+    round.  This is load-bearing: signatures are built by concatenating a
+    node's own signature with those of all its neighbours, so without the
+    per-round hash their length grows by roughly a factor of the average
+    degree every round (measured ~2.7x/round on OWL-restriction-shaped
+    data), exhausting memory within ~10 rounds.  Hashing bounds each
+    signature to a constant size while inducing exactly the same
+    partition of the blank nodes.
+
     Labels use 12 hex chars (48 bits); the birthday-bound collision
     probability is ~n²/2^49 (~0.002% at 100k nodes).  Genuine collisions
     — and structurally indistinguishable nodes, which legitimately share
@@ -107,7 +117,23 @@ def wl_blank_node_labels(
         sig[bid] = "|".join(sorted(parts))
 
     # Iterative refinement: incorporate neighbour signatures.
-    for _ in range(iterations):
+    #
+    # Each round's signature is hashed to a fixed width.  Refinement folds
+    # every neighbour's signature into a node's own, so leaving the
+    # signatures unhashed makes their length grow multiplicatively with
+    # degree each round and exhausts memory on real data.  Hashing induces
+    # the identical partition (see the module tests) at constant size.
+    #
+    # WL refinement is monotone: a node's new signature always embeds its
+    # previous one, so the partition can only get finer and the number of
+    # distinct signatures never decreases.  Once that count stops growing
+    # the partition is stable and further rounds cannot change it, so the
+    # fixpoint is both the cheapest and the most diff-stable stopping
+    # point.  A partition of n nodes can refine at most n times, which
+    # bounds the loop even for adversarial input.
+    max_rounds = len(bnode_ids) if iterations is None else iterations
+    previous_classes = len(set(sig.values()))
+    for _ in range(max_rounds):
         new_sig: dict[str, str] = {}
         for bid in bnode_ids:
             parts = [sig[bid]]
@@ -117,8 +143,13 @@ def wl_blank_node_labels(
             for s_str, p_str, s_is_bn in incoming.get(bid, []):
                 if s_is_bn:
                     parts.append(f"-{sig.get(s_str, '')}={p_str}")
-            new_sig[bid] = "|".join(sorted(parts))
+            new_sig[bid] = hashlib.sha256("|".join(sorted(parts)).encode("utf-8")).hexdigest()
         sig = new_sig
+        if iterations is None:
+            classes = len(set(sig.values()))
+            if classes == previous_classes:
+                break
+            previous_classes = classes
 
     # Convert signatures to truncated SHA-256 hashes.
     hash_map: dict[str, str] = {}
@@ -136,7 +167,7 @@ def wl_blank_node_labels(
 
 def wl_relabel_quads(
     quads: list,
-    iterations: int = 4,
+    iterations: int | None = None,
 ) -> list:
     """Rewrite canonical quads with diff-stable blank-node labels.
 
@@ -152,8 +183,9 @@ def wl_relabel_quads(
     ----------
     quads : list
         Canonical quads from pyoxigraph (i.e. after RDFC-1.0).
-    iterations : int
-        Number of WL refinement rounds (default 4).
+    iterations : int | None
+        Number of WL refinement rounds; ``None`` (the default) refines to
+        the WL fixpoint.  See :func:`wl_blank_node_labels`.
 
     Returns
     -------
