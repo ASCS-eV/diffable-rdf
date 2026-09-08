@@ -39,6 +39,7 @@ import re
 
 import pyoxigraph as ox
 import rdflib
+from rdflib.compare import to_canonical_graph
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,79 @@ _FORMAT_MAP: dict[str, ox.RdfFormat] = {
 
 # Formats that support prefix declarations.
 _PREFIX_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfFormat.N3, ox.RdfFormat.RDF_XML})
+
+# Formats serialized as one statement per line, which rdflib does not emit
+# in a stable order; these are sorted in the degraded fallback path.
+_LINE_ORIENTED_FORMATS = frozenset({"nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"})
+
+
+def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -> str:
+    """Serialize a graph that pyoxigraph cannot canonicalize, deterministically.
+
+    pyoxigraph rejects some graphs that rdflib accepts -- notably graphs
+    containing relative IRIs or literal predicates (SHACL annotation mode).
+    A plain ``graph.serialize()`` for such graphs is *not* reproducible
+    across processes: rdflib assigns blank-node labels non-deterministically,
+    so the structure and grouping of the output varies run to run.
+
+    To degrade gracefully instead of silently emitting non-deterministic
+    output, blank-node labels are canonicalized with rdflib's own
+    isomorphism-based canonicalization (:func:`rdflib.compare.to_canonical_graph`,
+    which uses a content-derived hash, not run-local ids) and the original
+    prefix and base bindings that the canonical graph drops are restored.
+    For line-oriented formats the serialized lines are additionally sorted.
+
+    Relative IRIs are preserved verbatim (not resolved against the base):
+    the goal is deterministic output, and silently rewriting them would
+    mask what is really a data problem in the source graph.
+
+    :param graph: The rdflib Graph that pyoxigraph could not parse.
+    :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
+    :return: Deterministic string serialization of the graph.
+    """
+    canonical = to_canonical_graph(graph)
+    # to_canonical_graph builds a fresh graph without the source's namespace
+    # bindings; rebind them so the output does not fall back to rdflib's
+    # non-deterministic auto-generated ``ns1:``/``ns2:`` prefixes.
+    for prefix, namespace in graph.namespace_manager.namespaces():
+        canonical.namespace_manager.bind(prefix, namespace, replace=True)
+    canonical.base = graph.base
+    serialized = canonical.serialize(format=output_format)
+    if output_format.lower() in _LINE_ORIENTED_FORMATS:
+        lines = [line for line in serialized.splitlines() if line.strip()]
+        return "\n".join(sorted(lines)) + "\n"
+    return serialized
+
+
+def _iri_terms(triples: list) -> set[str]:
+    """Return the set of IRI strings appearing anywhere in ``triples``.
+
+    Walks subjects, predicates, non-literal objects, and literal datatypes.
+    Used to filter the prefix dict down to namespaces that are actually
+    referenced by the canonicalized graph, so the output isn't padded with
+    unused ``@prefix`` declarations.
+    """
+    iris: set[str] = set()
+    for t in triples:
+        for term in (t.subject, t.predicate, t.object):
+            if isinstance(term, ox.NamedNode):
+                iris.add(term.value)
+            elif isinstance(term, ox.Literal):
+                dt = term.datatype
+                if dt is not None:
+                    iris.add(dt.value)
+    return iris
+
+
+def _filter_prefixes_to_used(prefixes: dict[str, str], used_iris: set[str]) -> dict[str, str]:
+    """Drop prefix bindings whose namespace is not a prefix of any used IRI.
+
+    A prefix is kept if at least one IRI in ``used_iris`` starts with its
+    namespace string. Parent-namespace matches are honored (e.g. a prefix
+    bound to ``http://schema.org/`` is kept when ``http://schema.org/Person``
+    appears in the graph).
+    """
+    return {prefix: ns for prefix, ns in prefixes.items() if any(iri.startswith(ns) for iri in used_iris)}
 
 
 # Characters that may appear escaped in a Turtle PN_LOCAL via PN_LOCAL_ESC.
@@ -162,9 +236,12 @@ def canonicalize_rdf_graph(
         triples = list(ox.parse(io.BytesIO(nt_bytes), format=ox.RdfFormat.N_TRIPLES))
     except SyntaxError:
         logger.warning(
-            "Graph contains non-standard RDF that pyoxigraph cannot parse; falling back to rdflib serializer"
+            "Graph contains non-standard RDF (e.g. relative IRIs or literal predicates) "
+            "that pyoxigraph cannot parse; falling back to rdflib. Output is still "
+            "deterministic (blank-node labels are canonicalized via rdflib) but is not "
+            "canonicalized with pyoxigraph RDFC-1.0."
         )
-        return graph.serialize(format=output_format)
+        return _deterministic_fallback_serialize(graph, output_format)
 
     dataset = ox.Dataset()
     for triple in triples:
@@ -201,6 +278,12 @@ def canonicalize_rdf_graph(
             if not _is_safe_prefix_iri(ns_str):
                 continue
             prefixes[str(prefix)] = ns_str
+        # Drop prefix bindings whose namespace is not referenced by any IRI
+        # in the graph. This prevents the rdflib NamespaceManager's default
+        # bindings (~30 well-known vocabularies) from being emitted into
+        # every output file regardless of whether the graph actually uses
+        # them.
+        prefixes = _filter_prefixes_to_used(prefixes, _iri_terms(sorted_triples))
     used_prefixes = prefixes
     try:
         result_bytes = ox.serialize(
@@ -209,11 +292,15 @@ def canonicalize_rdf_graph(
             prefixes=prefixes,
             base_iri=base_iri,
         )
-    except ValueError:
-        # pyoxigraph rejects prefixes with invalid IRIs (e.g. containing
-        # fragment-like characters such as double '#').  Retry without
-        # the offending prefixes by falling back to no prefixes, which
-        # still produces valid (if verbose) Turtle.
+    except ValueError as e:
+        # pyoxigraph 0.5.x reports rejected prefix IRIs with a message that
+        # begins with "Invalid prefix" (verified empirically). Only swallow
+        # that case and retry without prefixes -- any other ValueError (e.g.
+        # an invalid base IRI, or an unrelated future serializer bug) must
+        # propagate so it surfaces as a stack trace rather than silently
+        # dropping all prefix declarations.
+        if not str(e).startswith("Invalid prefix"):
+            raise
         logger.warning("pyoxigraph rejected one or more prefix IRIs; serializing without prefix declarations")
         result_bytes = ox.serialize(
             sorted_triples,
