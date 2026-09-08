@@ -45,6 +45,37 @@ class _NoCollectionTurtleSerializer(TurtleSerializer):
         return False
 
 
+def _rdfc_canonical_form(graph: "RdfGraph", pyoxigraph) -> str | None:
+    """Return the RDFC-1.0 canonical N-Triples of ``graph``, as sorted lines.
+
+    RDFC-1.0 is a canonical form: two graphs are isomorphic exactly when
+    their canonical serializations are identical.  Comparing these strings
+    is therefore an exact isomorphism test, and — unlike
+    ``rdflib.compare.isomorphic``, which canonicalizes in Python — it runs
+    in pyoxigraph's Rust implementation, which the pipeline already invokes
+    in phase 1.
+
+    Returns ``None`` when the graph cannot be represented in pyoxigraph at
+    all (non-standard RDF such as literal predicates).  Callers treat that
+    as "cannot be compared", never as "equal".
+
+    ``pyoxigraph`` is passed in rather than imported at module level because
+    this package imports it lazily, so that a missing optional dependency
+    surfaces as the actionable ImportError raised by
+    :func:`deterministic_turtle`.
+    """
+    try:
+        dataset = pyoxigraph.Dataset(
+            pyoxigraph.parse(graph.serialize(format="nt"), format=pyoxigraph.RdfFormat.N_TRIPLES)
+        )
+    except SyntaxError:
+        return None
+    dataset.canonicalize(pyoxigraph.CanonicalizationAlgorithm.RDFC_1_0)
+    return "\n".join(
+        sorted(str(pyoxigraph.Triple(quad.subject, quad.predicate, quad.object)) for quad in dataset)
+    )
+
+
 def deterministic_turtle(graph: "RdfGraph") -> str:
     """Serialize an RDF graph to Turtle with deterministic output ordering.
 
@@ -203,17 +234,25 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
     # normalize to a single newline for consistent file endings.
     import io
 
-    from rdflib.compare import isomorphic
-
     def _render(serializer_class) -> str:
         buffer = io.BytesIO()
         serializer_class(result_graph).serialize(buffer, encoding="utf-8")
         return buffer.getvalue().decode("utf-8").rstrip("\n") + "\n"
 
+    expected = _rdfc_canonical_form(result_graph, pyoxigraph)
+
     def _round_trips(text: str) -> bool:
         reparsed = Graph(bind_namespaces="none")
-        reparsed.parse(data=text, format="turtle")
-        return len(reparsed) == len(result_graph) and isomorphic(reparsed, result_graph)
+        try:
+            reparsed.parse(data=text, format="turtle")
+        except Exception:
+            # Output rdflib cannot read back is a failed round trip, not a
+            # crash: fall through to the collection-free rendering, which is
+            # what the two-attempt structure below exists for.
+            return False
+        if len(reparsed) != len(result_graph):
+            return False
+        return expected is not None and _rdfc_canonical_form(reparsed, pyoxigraph) == expected
 
     # A canonical form that does not round-trip is worse than none: it silently rewrites the
     # graph. Where inline ``( … )`` collection syntax is safe is rdflib's decision, and it is
