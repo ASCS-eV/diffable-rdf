@@ -159,6 +159,11 @@ RDF graph are deliberately mapped onto the same output:
   for hash bases: `http://ex.org/d#a` under base `http://ex.org/d#` would
   be emitted as `<a>` and re-resolve to a different IRI. Absolute IRIs are
   always written in full.
+- **On the degraded path, list structure is always explicit.** For graphs
+  pyoxigraph cannot canonicalize (literal predicates, relative IRIs), Turtle
+  is rendered without `( … )` collection syntax, because that syntax cannot
+  express a list whose tail is referenced more than once and this path has no
+  round-trip check to fall back on.
 
 The whole suite runs on Python 3.10 through 3.13.
 

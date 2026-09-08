@@ -60,6 +60,9 @@ _FORMAT_MAP: dict[str, ox.RdfFormat] = {
     "rdf/xml": ox.RdfFormat.RDF_XML,
     "trig": ox.RdfFormat.TRIG,
     "n3": ox.RdfFormat.N3,
+    "json-ld": ox.RdfFormat.JSON_LD,
+    "jsonld": ox.RdfFormat.JSON_LD,
+    "application/ld+json": ox.RdfFormat.JSON_LD,
 }
 
 # Formats that support prefix declarations.
@@ -70,6 +73,24 @@ _PREFIX_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfForma
 _LINE_ORIENTED_FORMATS = frozenset({"nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"})
 # Formats whose output is JSON and can therefore be canonicalized structurally.
 _JSON_FORMATS = frozenset({"json-ld", "jsonld", "application/ld+json"})
+
+# Turtle-family formats whose serializer may use ``( … )`` collection syntax.
+# That syntax can only express a list whose tail is referenced once, so on the
+# degraded path -- which has no round-trip check, because relative IRIs are
+# deliberately passed through verbatim and would fail an isomorphism test --
+# it is rendered without collection syntax instead. Explicit
+# rdf:first/rdf:rest can express any arrangement of cells, shared or not.
+_COLLECTION_CAPABLE_FORMATS = frozenset({"turtle", "ttl"})
+
+# Formats whose output is verified against the input before being returned.
+# These are the formats this module post-processes as text (see
+# _expand_trailing_dot_curies) and that rdflib re-parses to the same terms.
+# RDF/XML is excluded because literals containing XML-illegal control
+# characters cannot be represented in it at all, which is a limitation of the
+# format rather than a defect this check should raise on; N-Triples and
+# N-Quads are excluded because they have no compact list syntax and receive no
+# text post-processing.
+_VERIFIED_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfFormat.N3})
 
 
 def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -> str:
@@ -95,6 +116,10 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     relativizes against it by naive string prefixing, which corrupts terms
     under a hash base (see :func:`deterministic_turtle`).
 
+    Turtle-family output is rendered without ``( … )`` collection syntax,
+    because that syntax cannot express a list whose tail is referenced more
+    than once and this path has no round-trip check to fall back on.
+
     :param graph: The rdflib Graph that pyoxigraph could not parse.
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
     :return: Deterministic string serialization of the graph.
@@ -105,10 +130,30 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     # non-deterministic auto-generated ``ns1:``/``ns2:`` prefixes.
     for prefix, namespace in graph.namespace_manager.namespaces():
         canonical.namespace_manager.bind(prefix, namespace, replace=True)
-    serialized = canonical.serialize(format=output_format)
+    if output_format.lower() in _COLLECTION_CAPABLE_FORMATS:
+        # Imported here, not at module level: diffable_rdf.turtle imports this
+        # module from inside deterministic_turtle, and keeping this import
+        # local mirrors that and keeps the two modules free of an import-time
+        # dependency in either direction.
+        import io
+
+        from .turtle import _NoCollectionTurtleSerializer
+
+        buffer = io.BytesIO()
+        _NoCollectionTurtleSerializer(canonical).serialize(buffer, encoding="utf-8")
+        serialized = buffer.getvalue().decode("utf-8")
+    else:
+        serialized = canonical.serialize(format=output_format)
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
         lines = [line for line in serialized.splitlines() if line.strip()]
         return "\n".join(sorted(lines)) + "\n"
+    if output_format.lower() in _JSON_FORMATS:
+        # rdflib's JSON-LD serializer emits node objects in a set-iteration
+        # order that varies between processes.  This has to live here rather
+        # than in the caller: JSON-LD reaches this function from the
+        # unsupported-format branch *and* from the SyntaxError branch, and
+        # only one of those used to apply it.
+        return deterministic_json(json.loads(serialized)) + "\n"
     return serialized
 
 
@@ -203,6 +248,43 @@ def _is_safe_prefix_iri(iri: str) -> bool:
     return True
 
 
+def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: str) -> None:
+    """Raise if ``serialized`` does not say the same thing as ``source``.
+
+    A canonical form that does not round-trip is worse than none: it
+    silently rewrites the graph.  This function compares RDFC-1.0 canonical
+    forms, which is an exact isomorphism test, and is skipped when the
+    source graph is not representable in pyoxigraph (the degraded path,
+    which deliberately passes relative IRIs through verbatim and so cannot
+    be compared this way).
+
+    :param source: The graph that was serialized.
+    :param serialized: The text produced for it.
+    :param output_format: The rdflib format name, used for re-parsing.
+    :raises ValueError: If the output does not round-trip.
+    """
+    from .turtle import _rdfc_canonical_form
+
+    expected = _rdfc_canonical_form(source, ox)
+    if expected is None:
+        return
+    reparsed = rdflib.Graph()
+    try:
+        reparsed.parse(data=serialized, format=output_format)
+    except Exception as exc:
+        raise ValueError(
+            f"canonical {output_format} serialization does not parse back "
+            f"({type(exc).__name__}: {exc}). This is a bug in diffable-rdf: "
+            "please report it with the input graph."
+        ) from exc
+    if _rdfc_canonical_form(reparsed, ox) != expected:
+        raise ValueError(
+            f"canonical {output_format} serialization does not round-trip; "
+            f"{len(source)} triples in, {len(reparsed)} out. This is a bug in "
+            "diffable-rdf: please report it with the input graph."
+        )
+
+
 def canonicalize_rdf_graph(
     graph: rdflib.Graph,
     output_format: str = "turtle",
@@ -232,11 +314,6 @@ def canonicalize_rdf_graph(
         # processes for e.g. json-ld -- exactly what this function promises
         # not to do. Route through the deterministic fallback instead.
         data = _deterministic_fallback_serialize(graph, output_format)
-        if output_format.lower() in _JSON_FORMATS:
-            # rdflib's JSON-LD serializer emits node objects in a
-            # set-iteration order that varies between processes; canonicalize
-            # the structure so only the content determines the bytes.
-            data = deterministic_json(json.loads(data)) + "\n"
         return data.rstrip("\n") + "\n" if data.endswith("\n") else data
 
     # 1. Transfer rdflib graph to pyoxigraph via N-Triples.
@@ -324,6 +401,15 @@ def canonicalize_rdf_graph(
         )
         used_prefixes = None
     result = result_bytes.decode("utf-8")
+    if ox_format == ox.RdfFormat.JSON_LD:
+        # pyoxigraph emits compact single-line JSON; re-render it indented so
+        # the output is diffable line by line, which is the point of this
+        # library. Safe to route through deterministic_json: pyoxigraph writes
+        # *expanded* JSON-LD, so there is no @context or @list array whose
+        # order carries meaning, and the triples were already sorted above.
+        result = deterministic_json(json.loads(result)) + "\n"
     if ox_format in _PREFIX_FORMATS and used_prefixes:
         result = _expand_trailing_dot_curies(result, used_prefixes)
+    if ox_format in _VERIFIED_FORMATS:
+        _assert_round_trips(graph, result, output_format)
     return result

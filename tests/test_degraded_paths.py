@@ -32,6 +32,16 @@ from diffable_rdf import (
 
 EX = Namespace("http://example.org/")
 
+SHARED_TAIL_TURTLE = """
+@prefix ex: <http://example.org/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+_:t rdf:first "z" ; rdf:rest rdf:nil .
+_:a rdf:first "a" ; rdf:rest _:t .
+_:b rdf:first "b" ; rdf:rest _:t .
+ex:s1 ex:items _:a .
+ex:s2 ex:items _:b .
+"""
+
 
 def _graph_with_named_bnode_and_literal_predicate() -> Graph:
     """A graph that forces both the fallback path and a *named* blank node.
@@ -409,3 +419,100 @@ def test_wl_fixpoint_resolves_collisions_that_few_rounds_leave_behind():
     assert all("_" not in label for label in fixpoint.values()), (
         "the fixpoint should separate them, so no collision counter is needed"
     )
+
+
+def test_degraded_turtle_is_lossless_for_shared_list_tails() -> None:
+    """The degraded path must not detach a shared list cell.
+
+    Compact ``( … )`` collection syntax can only express a list whose tail is
+    referenced once. The degraded path used to render with rdflib's default
+    serializer and return the result unchecked, so a graph with a shared tail
+    plus one relative IRI came back with a dangling blank-node reference --
+    issue #1, on the one path that had no round-trip guard.
+    """
+    graph = Graph()
+    graph.parse(data=SHARED_TAIL_TURTLE, format="turtle")
+    graph.add((URIRef("relative/thing"), EX.p, Literal("v")))  # forces the degraded path
+
+    result = deterministic_turtle(graph)
+    reparsed = Graph()
+    reparsed.parse(data=result, format="turtle")
+
+    defined = {s for s in reparsed.subjects() if isinstance(s, BNode)}
+    referenced = {o for o in reparsed.objects() if isinstance(o, BNode)}
+    assert not (referenced - defined), f"{len(referenced - defined)} dangling blank-node reference(s)"
+    assert len(reparsed) == len(graph), f"{len(graph)} triples in, {len(reparsed)} out"
+    assert "( " not in result, "the degraded path must not use collection syntax"
+
+
+def test_json_ld_is_lossless_for_shared_list_tails() -> None:
+    """JSON-LD must not duplicate a shared list cell.
+
+    rdflib's JSON-LD serializer applies ``@list`` compaction, which cannot
+    express a shared tail and duplicated it into both lists -- 6 triples in,
+    8 out. Routing JSON-LD through pyoxigraph's expanded serializer removes
+    the failure class.
+    """
+    graph = Graph()
+    graph.parse(data=SHARED_TAIL_TURTLE, format="turtle")
+
+    result = canonicalize_rdf_graph(graph, output_format="json-ld")
+    reparsed = Graph()
+    reparsed.parse(data=result, format="json-ld")
+
+    assert len(reparsed) == len(graph), f"{len(graph)} triples in, {len(reparsed)} out"
+    assert isomorphic(reparsed, graph), "json-ld output is not isomorphic to the input"
+    assert "@list" not in result, "expanded JSON-LD must not use @list compaction"
+
+
+def test_canonicalize_rdf_graph_raises_rather_than_emitting_unparseable_turtle() -> None:
+    """Output that rdflib cannot read back must raise, not be returned.
+
+    ``_expand_trailing_dot_curies`` rewrites CURIEs by regex over the
+    serialized text, which can match inside a string literal and corrupt it.
+    Until that is fixed, the round-trip check must at least make the failure
+    loud: a silent lossy canonical form is the one outcome this library must
+    never produce.
+    """
+    graph = Graph()
+    graph.bind("ex", EX)
+    graph.add((EX.s, EX.p, Literal("see ex:thing\\. more")))
+    graph.add((EX.other, EX.p, EX.o))  # makes the ex: prefix used, so it is declared
+
+    with pytest.raises(ValueError, match="does not (parse back|round-trip)"):
+        canonicalize_rdf_graph(graph, output_format="turtle")
+
+
+def test_degraded_json_ld_is_reproducible_across_processes() -> None:
+    """JSON-LD must stay byte-reproducible on the degraded path too.
+
+    Routing JSON-LD through pyoxigraph means a graph pyoxigraph *cannot*
+    parse now reaches the SyntaxError fallback, which returns rdflib's raw
+    JSON-LD -- and rdflib emits node objects in a set-iteration order that
+    varies between processes. The existing cross-process test uses a graph
+    pyoxigraph parses happily, so it never exercises this branch; without
+    this test the same graph produced five different outputs in five
+    interpreters.
+    """
+    script = textwrap.dedent(
+        """
+        from rdflib import Graph, Literal, Namespace
+        from diffable_rdf import canonicalize_rdf_graph
+        import sys
+        EX = Namespace("http://example.org/")
+        g = Graph()
+        g.bind("ex", EX)
+        for i in range(4):
+            g.add((EX[f"s{i}"], EX.p, Literal(f"v{i}")))
+        # a literal predicate is what pyoxigraph rejects, forcing the fallback
+        g.addN([(EX.s0, Literal("literal-predicate"), Literal("x"), g)])
+        sys.stdout.write(canonicalize_rdf_graph(g, output_format="json-ld"))
+        """
+    )
+    runs = {
+        subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, check=True
+        ).stdout
+        for _ in range(5)
+    }
+    assert len(runs) == 1, "degraded json-ld is not reproducible across processes"
