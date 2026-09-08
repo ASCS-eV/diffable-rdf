@@ -85,6 +85,25 @@ well_known_prefix_map()                    # namespace IRI -> standard prefix na
 | `canonicalize_rdf_graph(graph, output_format="turtle") -> str` | RDFC-1.0 canonical serialization (with rdflib fallback for non-standard RDF). |
 | `deterministic_json(obj, indent=3, preserve_list_order_keys=None) -> str` | Recursively sorted JSON; preserves JSON-LD ordered keys (`@context`, `@list`, …). |
 | `well_known_prefix_map() -> dict[str, str]` | rdflib's curated namespace→prefix bindings. |
+| `wl_blank_node_labels(quads, iterations=4) -> dict[str, str]` | Diff-stable label for each blank node, from canonical pyoxigraph quads. |
+| `wl_relabel_quads(quads, iterations=4) -> list` | The same labels, already applied to the quads. |
+
+### Composing with an existing pipeline
+
+If a tool already runs RDFC-1.0 itself, it does not need `deterministic_turtle`
+— and should not use it, because that would replace the tool's own prefix,
+base-IRI and fallback handling. Such callers can gain diff stability by
+inserting one step before serializing:
+
+```python
+from diffable_rdf import wl_relabel_quads
+
+dataset.canonicalize(CanonicalizationAlgorithm.RDFC_1_0)
+quads = wl_relabel_quads(list(dataset))   # <- the only added line
+```
+
+This is format-agnostic: it relabels blank nodes and leaves serialization
+entirely to the caller.
 
 ## Guarantees, and how they are tested
 
@@ -102,6 +121,12 @@ Plus checks that no `sh:in`-style list reference dangles, that list cell counts
 survive, and that ten repeated passes produce no byte drift. Comparison is done
 under RDF 1.1 literal identity, so `"a"^^xsd:string` and `"a"` are treated as the
 same term rather than as a spurious difference.
+
+`tests/test_degraded_paths.py` covers the paths pyoxigraph cannot handle
+(literal predicates, relative IRIs). Determinism there is asserted across
+*separate interpreter processes*, since the failure mode being guarded
+against — rdflib's run-local blank-node identifiers — is invisible within
+a single process.
 
 The whole suite runs on Python 3.10 through 3.13.
 

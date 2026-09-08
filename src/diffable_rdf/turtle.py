@@ -21,105 +21,9 @@ logger = logging.getLogger(__name__)
 from rdflib.plugins.serializers.turtle import TurtleSerializer  # noqa: E402
 
 
-def _wl_signatures(
-    quads: list,
-    iterations: int = 4,
-) -> dict[str, str]:
-    """Compute Weisfeiler-Lehman structural signatures for blank nodes.
-
-    Uses 1-dimensional WL colour refinement [1]_ to assign each blank
-    node a deterministic signature derived from its multi-hop
-    neighbourhood structure.  The signature depends only on predicate
-    IRIs, literal values, and named-node IRIs — **not** on blank-node
-    identifiers — so it remains stable when unrelated triples are added
-    or removed.
-
-    Parameters
-    ----------
-    quads : list
-        Canonical quads from pyoxigraph (after RDFC-1.0).
-    iterations : int
-        Number of WL refinement rounds (default 4).
-
-    Returns
-    -------
-    dict[str, str]
-        Mapping from canonical blank-node ID (e.g. ``c14n42``) to a
-        truncated SHA-256 hash suitable for use as a stable blank-node
-        label.
-
-    References
-    ----------
-    .. [1] Weisfeiler, B. & Leman, A. (1968). "The reduction of a graph
-       to canonical form and the algebra which appears therein."
-    """
-    import hashlib
-
-    import pyoxigraph  # guaranteed available — caller (deterministic_turtle) checks
-
-    # Collect all blank node IDs and build adjacency index.
-    bnode_ids: set[str] = set()
-    # outgoing[b] = list of (predicate_str, object_str_or_bnode_id, is_bnode)
-    outgoing: dict[str, list[tuple[str, str, bool]]] = {}
-    # incoming[b] = list of (subject_str_or_bnode_id, predicate_str, is_bnode)
-    incoming: dict[str, list[tuple[str, str, bool]]] = {}
-
-    for q in quads:
-        s, p, o = q.subject, q.predicate, q.object
-        s_is_bn = isinstance(s, pyoxigraph.BlankNode)
-        o_is_bn = isinstance(o, pyoxigraph.BlankNode)
-        p_str = str(p)
-
-        if s_is_bn:
-            bnode_ids.add(s.value)
-            outgoing.setdefault(s.value, []).append((p_str, o.value if o_is_bn else str(o), o_is_bn))
-        if o_is_bn:
-            bnode_ids.add(o.value)
-            incoming.setdefault(o.value, []).append((s.value if s_is_bn else str(s), p_str, s_is_bn))
-
-    # Initialise signatures: named-node edges only (no bnode IDs).
-    sig: dict[str, str] = {}
-    for bid in bnode_ids:
-        parts = []
-        for p_str, o_str, o_is_bn in outgoing.get(bid, []):
-            if not o_is_bn:
-                parts.append(f"+{p_str}={o_str}")
-        for s_str, p_str, s_is_bn in incoming.get(bid, []):
-            if not s_is_bn:
-                parts.append(f"-{s_str}={p_str}")
-        sig[bid] = "|".join(sorted(parts))
-
-    # Iterative refinement: incorporate neighbour signatures.
-    for _ in range(iterations):
-        new_sig: dict[str, str] = {}
-        for bid in bnode_ids:
-            parts = [sig[bid]]
-            for p_str, o_str, o_is_bn in outgoing.get(bid, []):
-                if o_is_bn:
-                    parts.append(f"+{p_str}={sig.get(o_str, '')}")
-            for s_str, p_str, s_is_bn in incoming.get(bid, []):
-                if s_is_bn:
-                    parts.append(f"-{sig.get(s_str, '')}={p_str}")
-            new_sig[bid] = "|".join(sorted(parts))
-        sig = new_sig
-
-    # Convert signatures to truncated SHA-256 hashes.
-    # Use 12 hex chars (48 bits) — birthday-bound collision probability
-    # is ~n²/2^49: ~0.002% at 100k nodes.  Collisions are handled by
-    # appending a counter (see below), so correctness is preserved.
-    hash_map: dict[str, str] = {}
-    seen_hashes: dict[str, int] = {}
-    for bid in sorted(bnode_ids):
-        digest = hashlib.sha256(sig[bid].encode("utf-8")).hexdigest()[:12]
-        # Handle collisions by appending a counter.
-        count = seen_hashes.get(digest, 0)
-        seen_hashes[digest] = count + 1
-        label = f"b{digest}" if count == 0 else f"b{digest}_{count}"
-        hash_map[bid] = label
-
-    return hash_map
-
-
+# The WL labelling primitive lives in diffable_rdf.wl so that tools which
+# already run RDFC-1.0 themselves can reuse it without this serializer.
+from diffable_rdf.wl import wl_blank_node_labels as _wl_signatures  # noqa: E402
 
 
 class _NoCollectionTurtleSerializer(TurtleSerializer):
@@ -154,7 +58,12 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
        each blank node's multi-hop neighbourhood.  These hashes depend
        only on predicate IRIs, literal values, and named-node IRIs —
        not on blank-node numbering — so adding or removing a triple
-       only affects the identifiers of directly involved blank nodes.
+       relabels only the blank nodes within roughly ``iterations`` hops
+       of the change, instead of renumbering every blank node in the
+       graph as RDFC-1.0 alone does.  Note that a blank node referenced
+       from many subjects (a "hub") folds all of those references into
+       its signature, so editing any one of them relabels the hub and
+       churns the lines that reference it.
     3. **Hybrid rdflib re-serialization** parses the canonicalized,
        WL-hashed triples back into an rdflib ``Graph`` and serializes
        with rdflib's native Turtle writer.  This recovers idiomatic
@@ -202,7 +111,23 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
     # ── Phase 1: RDFC-1.0 canonicalization ──────────────────────────
     nt_data = graph.serialize(format="nt")
 
-    dataset = pyoxigraph.Dataset(pyoxigraph.parse(nt_data, format=pyoxigraph.RdfFormat.N_TRIPLES))
+    try:
+        dataset = pyoxigraph.Dataset(pyoxigraph.parse(nt_data, format=pyoxigraph.RdfFormat.N_TRIPLES))
+    except SyntaxError:
+        # Non-standard RDF that rdflib accepts but pyoxigraph rejects
+        # (relative IRIs, or literal predicates from SHACL annotation
+        # mode). Degrade to the deterministic rdflib path rather than
+        # crashing: the output is no longer diff-stable, but it is still
+        # reproducible across processes.
+        from diffable_rdf.canonicalize import _deterministic_fallback_serialize
+
+        logger.warning(
+            "Graph contains non-standard RDF (e.g. relative IRIs or literal predicates) "
+            "that pyoxigraph cannot parse; falling back to rdflib. Output is still "
+            "deterministic but is not diff-stable."
+        )
+        return _deterministic_fallback_serialize(graph, "turtle")
+
     dataset.canonicalize(pyoxigraph.CanonicalizationAlgorithm.RDFC_1_0)
 
     canonical_quads = list(dataset)
@@ -242,6 +167,13 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
         raise TypeError(f"Unexpected pyoxigraph term type: {type(term).__name__}: {term}")
 
     result_graph = Graph(bind_namespaces="none")
+    # NOTE: the source graph's ``base`` is deliberately NOT carried across.
+    # rdflib relativizes IRIs against a base by naive string prefixing, which
+    # is not RFC-3986-correct for hash bases ("http://ex.org/d#") or bases
+    # without a trailing slash: "http://ex.org/d#a" is emitted as "<a>", which
+    # re-resolves to a different IRI.  Preserving the base therefore corrupts
+    # terms and trips the round-trip guard below.  Absolute IRIs are always
+    # emitted in full, which is lossless and diff-stable.
     for triple in remapped:
         result_graph.add(
             (
