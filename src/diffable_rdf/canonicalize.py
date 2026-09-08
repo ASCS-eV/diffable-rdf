@@ -80,16 +80,22 @@ _JSON_FORMATS = frozenset({"json-ld", "jsonld", "application/ld+json"})
 # deliberately passed through verbatim and would fail an isomorphism test --
 # it is rendered without collection syntax instead. Explicit
 # rdf:first/rdf:rest can express any arrangement of cells, shared or not.
-_COLLECTION_CAPABLE_FORMATS = frozenset({"turtle", "ttl"})
+# ``n3`` is included because rdflib's N3Serializer subclasses TurtleSerializer
+# and inherits its ``( … )`` rendering; rendering it through
+# _NoCollectionTurtleSerializer instead is sound because Turtle is a subset
+# of N3, so collection-free Turtle text is also valid N3.
+_COLLECTION_CAPABLE_FORMATS = frozenset({"turtle", "ttl", "n3"})
 
 # Formats whose output is verified against the input before being returned.
-# These are the formats this module post-processes as text (see
-# _expand_trailing_dot_curies) and that rdflib re-parses to the same terms.
-# RDF/XML is excluded because literals containing XML-illegal control
-# characters cannot be represented in it at all, which is a limitation of the
-# format rather than a defect this check should raise on; N-Triples and
-# N-Quads are excluded because they have no compact list syntax and receive no
-# text post-processing.
+# RDF/XML is excluded not because it escapes text post-processing -- it does
+# not: _expand_trailing_dot_curies runs on it too, since ox.RdfFormat.RDF_XML
+# is in _PREFIX_FORMATS -- but because literals containing XML-illegal
+# control characters cannot be represented in RDF/XML at all, so a
+# round-trip check there would fail for a reason that is a limitation of the
+# format rather than a defect of this library. This leaves RDF/XML's text
+# post-processing unverified, a known gap. N-Triples and N-Quads are
+# excluded because they have no compact list syntax and receive no text
+# post-processing.
 _VERIFIED_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfFormat.N3})
 
 
@@ -132,11 +138,10 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         canonical.namespace_manager.bind(prefix, namespace, replace=True)
     if output_format.lower() in _COLLECTION_CAPABLE_FORMATS:
         # Imported here, not at module level: diffable_rdf.turtle imports this
-        # module from inside deterministic_turtle, and keeping this import
-        # local mirrors that and keeps the two modules free of an import-time
-        # dependency in either direction.
-        import io
-
+        # module from inside deterministic_turtle, so importing it back at
+        # module level here would create an import cycle. Deferring the
+        # import to call time avoids that without either module needing to
+        # know the other's internals.
         from .turtle import _NoCollectionTurtleSerializer
 
         buffer = io.BytesIO()
@@ -270,7 +275,15 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
         return
     reparsed = rdflib.Graph()
     try:
-        reparsed.parse(data=serialized, format=output_format)
+        # rdflib's parser plugin lookup is case-sensitive ("Turtle" is not
+        # registered, only "turtle" is), unlike every other format lookup in
+        # this module (_FORMAT_MAP.get(output_format.lower()), and the
+        # .lower() checks against _COLLECTION_CAPABLE_FORMATS,
+        # _LINE_ORIENTED_FORMATS, _JSON_FORMATS). Normalise here so a
+        # mixed-case alias that pyoxigraph accepted does not misreport a
+        # plugin-name miss as a round-trip failure. The original spelling is
+        # kept in the messages below, since that is what the caller passed.
+        reparsed.parse(data=serialized, format=output_format.lower())
     except Exception as exc:
         raise ValueError(
             f"canonical {output_format} serialization does not parse back "

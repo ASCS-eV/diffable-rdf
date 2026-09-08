@@ -516,3 +516,51 @@ def test_degraded_json_ld_is_reproducible_across_processes() -> None:
         for _ in range(5)
     }
     assert len(runs) == 1, "degraded json-ld is not reproducible across processes"
+
+
+@pytest.mark.parametrize("output_format", ["Turtle", "TTL", "N3"])
+def test_canonicalize_rdf_graph_accepts_mixed_case_format_names(output_format: str) -> None:
+    """A mixed-case format alias must round-trip, not raise.
+
+    ``_assert_round_trips`` used to hand the caller's raw ``output_format``
+    to ``rdflib.Graph.parse``, whose plugin lookup is case-sensitive -- so a
+    format pyoxigraph accepted case-insensitively (e.g. "Turtle") came back
+    out of the round-trip guard as a ValueError reporting a parser-plugin
+    miss ("No plugin registered for (Turtle, ...)") rather than a real
+    round-trip failure. Every other format lookup in this module normalises
+    case; the round-trip check must too.
+    """
+    graph = Graph()
+    graph.bind("ex", EX)
+    graph.add((EX.s, EX.p, Literal("v")))
+
+    result = canonicalize_rdf_graph(graph, output_format=output_format)
+    reparsed = Graph()
+    reparsed.parse(data=result, format=output_format.lower())
+
+    assert isomorphic(reparsed, graph), f"{output_format} output is not isomorphic to the input"
+
+
+def test_degraded_n3_is_lossless_for_shared_list_tails() -> None:
+    """N3's degraded path must not duplicate a shared list cell either.
+
+    rdflib's N3Serializer subclasses TurtleSerializer and inherits its
+    ``( … )`` collection rendering, so the degraded path's collection-free
+    fix for Turtle silently left N3 unfixed unless "n3" is also in
+    ``_COLLECTION_CAPABLE_FORMATS``. Turtle is a subset of N3, so rendering
+    N3 through the collection-free Turtle serializer is valid N3 output.
+    """
+    rdf_first = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#first")
+    graph = Graph()
+    graph.parse(data=SHARED_TAIL_TURTLE, format="turtle")
+    graph.add((URIRef("relative/thing"), EX.p, Literal("v")))  # forces the degraded path
+
+    result = canonicalize_rdf_graph(graph, output_format="n3")
+    reparsed = Graph()
+    reparsed.parse(data=result, format="n3")
+
+    cells_in = len(list(graph.triples((None, rdf_first, None))))
+    cells_out = len(list(reparsed.triples((None, rdf_first, None))))
+    assert cells_out == cells_in, f"{cells_in} rdf:first cell(s) in, {cells_out} out"
+    assert len(reparsed) == len(graph), f"{len(graph)} triples in, {len(reparsed)} out"
+    assert "( " not in result, "the degraded n3 path must not use collection syntax"
