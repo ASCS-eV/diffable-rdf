@@ -123,10 +123,31 @@ under RDF 1.1 literal identity, so `"a"^^xsd:string` and `"a"` are treated as th
 same term rather than as a spurious difference.
 
 `tests/test_degraded_paths.py` covers the paths pyoxigraph cannot handle
-(literal predicates, relative IRIs). Determinism there is asserted across
-*separate interpreter processes*, since the failure mode being guarded
-against — rdflib's run-local blank-node identifiers — is invisible within
-a single process.
+(literal predicates, relative IRIs) and the formats it does not support
+(notably `json-ld`). Determinism there is asserted across *separate
+interpreter processes*, since the failure mode being guarded against —
+rdflib's run-local blank-node identifiers, and rdflib's set-iteration
+node ordering — is invisible within a single process.
+
+### Normalizations applied
+
+Canonicalization is not byte-preserving; two inputs that denote the same
+RDF graph are deliberately mapped onto the same output:
+
+- **Language tags are lowercased** (`"hi"@en-US` → `"hi"@en-us`). Language
+  tags are case-insensitive in RDF 1.1, and rdflib's own `Literal`
+  equality agrees that the two are equal. Note that
+  `rdflib.compare.isomorphic` is *stricter* than that equality and reports
+  such graphs as non-isomorphic, so it cannot be used to check
+  losslessness across a language-tag case change.
+- **`"a"^^xsd:string` and `"a"`** are the same term under RDF 1.1.
+- **Prefix declarations are filtered** to the namespaces the graph
+  actually uses, so unused bindings do not appear in the output.
+- **`graph.base` is not carried into the output.** rdflib relativizes
+  against a base by naive string prefixing, which is not RFC-3986-correct
+  for hash bases: `http://ex.org/d#a` under base `http://ex.org/d#` would
+  be emitted as `<a>` and re-resolve to a different IRI. Absolute IRIs are
+  always written in full.
 
 The whole suite runs on Python 3.10 through 3.13.
 

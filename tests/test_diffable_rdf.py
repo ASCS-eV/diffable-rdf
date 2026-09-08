@@ -130,3 +130,48 @@ def test_canonicalize_rdf_graph_falls_back_for_literal_predicates():
 def test_well_known_prefix_map_contains_schema_org():
     m = well_known_prefix_map()
     assert m.get("https://schema.org/") == "schema"
+
+
+@pytest.mark.parametrize(
+    "obj",
+    [
+        {1: "a", "b": 2},
+        {None: "a", "b": 1},
+        {True: "x", 1.5: "y", "z": 0},
+        {2: "two", 10: "ten"},
+    ],
+)
+def test_deterministic_json_accepts_non_string_keys(obj):
+    """Must not be less permissive than the stdlib it wraps.
+
+    json.dumps coerces int/float/bool/None keys to strings; sorting the
+    raw keys raised TypeError on any mix of key types, rejecting input
+    that serializes fine with json.dumps.
+    """
+    out = deterministic_json(obj)
+    assert json.loads(out) == json.loads(json.dumps(obj))
+
+
+def test_deterministic_json_is_stable_regardless_of_insertion_order():
+    """Key order in the input must not influence the output bytes."""
+    forward = deterministic_json({1: "a", "b": 2, None: 3})
+    reverse = deterministic_json({None: 3, "b": 2, 1: "a"})
+    assert forward == reverse
+
+
+def test_canonicalize_rdf_graph_normalizes_language_tag_case():
+    """Language tags are case-insensitive in RDF 1.1, and are lowercased.
+
+    This is canonicalization, not data loss: rdflib's own Literal equality
+    treats "en-US" and "en-us" as equal. Note that rdflib.compare.isomorphic
+    is stricter than that equality and will report the two graphs as
+    non-isomorphic, so it must not be used to assert losslessness here.
+    """
+    upper = Graph()
+    upper.add((EX.s, EX.p, Literal("hi", lang="en-US")))
+    lower = Graph()
+    lower.add((EX.s, EX.p, Literal("hi", lang="en-us")))
+
+    assert Literal("hi", lang="en-US") == Literal("hi", lang="en-us")
+    assert canonicalize_rdf_graph(upper, "turtle") == canonicalize_rdf_graph(lower, "turtle")
+    assert "@en-us" in canonicalize_rdf_graph(upper, "turtle")
