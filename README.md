@@ -94,6 +94,11 @@ blank nodes sharing a signature, and those ties are broken in RDFC-1.0's
 `c14nN` order, which reintroduces exactly the instability the labels exist to
 remove. Pass an explicit integer only if you need a fixed round count.
 
+Because a node's label is derived from its whole connected blank-node
+structure, an edit *inside* one large connected structure can relabel all of
+it. Diff stability comes from isolating unrelated regions of the graph from
+each other, not from isolating parts of a single interconnected one.
+
 ### Composing with an existing pipeline
 
 If a tool already runs RDFC-1.0 itself, it does not need `deterministic_turtle`

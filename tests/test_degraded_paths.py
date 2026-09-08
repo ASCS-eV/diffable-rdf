@@ -344,48 +344,68 @@ def _partition(labels: dict[str, str]) -> list[tuple[str, ...]]:
     return sorted(tuple(sorted(group)) for group in groups.values())
 
 
-def test_wl_refines_to_a_fixpoint_by_default():
-    """The default must refine until the partition stops changing."""
-    quads = _canonical_quads(_shapes_graph(12))
+def _uniform_chain_graph(length: int) -> Graph:
+    """A chain of blank nodes joined by one repeated predicate.
 
-    fixpoint = wl_blank_node_labels(quads)
-    assert all("_" not in label for label in fixpoint.values()), (
-        "structurally distinct nodes should not need collision counters at the fixpoint"
-    )
-
-    # Refining past the fixpoint cannot change the partition.
-    for iterations in (32, 64):
-        forced = wl_blank_node_labels(quads, iterations=iterations)
-        assert _partition(forced) == _partition(fixpoint), (
-            f"partition changed after {iterations} rounds; fixpoint was not reached"
-        )
-
-
-def test_wl_fixpoint_distinguishes_nodes_that_few_rounds_cannot():
-    """Under-refining leaves nodes colliding, which leaks RDFC-1.0 numbering.
-
-    Colliding signatures are disambiguated by a counter assigned in
-    ``c14nN`` order, so nodes WL cannot yet tell apart inherit the very
-    instability WL exists to remove. A chain of *identically labelled*
-    edges is the canonical case: nodes in the middle are indistinguishable
-    until refinement has propagated the chain's endpoints far enough to
-    reach them.
+    Every edge carries the same IRI, so a node's identity is only fixed
+    once refinement has propagated the chain's endpoints all the way to
+    it. Separating a chain of ``length`` nodes therefore needs on the
+    order of ``length`` rounds — far more than any small fixed count.
     """
     g = Graph()
     previous = BNode()
     g.add((EX.Start, EX.head, previous))
-    for _ in range(5):
+    for _ in range(length - 1):
         current = BNode()
         g.add((previous, EX.next, current))
         previous = current
-    quads = _canonical_quads(g)
+    return g
 
-    coarse = _partition(wl_blank_node_labels(quads, iterations=1))
+
+def test_wl_refines_to_a_fixpoint_by_default():
+    """The default must keep refining past any small fixed round count.
+
+    The graph is chosen so the fixpoint is provably out of reach of the
+    previous default of 4 rounds; otherwise this test would pass just as
+    happily against a fixed count and would not guard the behaviour at
+    all.
+    """
+    quads = _canonical_quads(_uniform_chain_graph(20))
+
     fixpoint = _partition(wl_blank_node_labels(quads))
+    four_rounds = _partition(wl_blank_node_labels(quads, iterations=4))
 
-    assert len(fixpoint) > len(coarse), (
-        "the fixpoint must separate nodes that a single round cannot"
+    assert len(fixpoint) > len(four_rounds), (
+        "the default must refine further than a fixed 4 rounds on a graph that needs more"
     )
     assert all(len(group) == 1 for group in fixpoint), (
-        "every node in a chain is structurally unique at the fixpoint"
+        "every node in a uniform chain is structurally unique at the fixpoint"
+    )
+
+    # Refining past the fixpoint cannot change the partition.
+    for iterations in (64, 128):
+        forced = _partition(wl_blank_node_labels(quads, iterations=iterations))
+        assert forced == fixpoint, (
+            f"partition changed after {iterations} rounds; fixpoint was not reached"
+        )
+
+
+def test_wl_fixpoint_resolves_collisions_that_few_rounds_leave_behind():
+    """Under-refining leaves nodes colliding, which leaks RDFC-1.0 numbering.
+
+    Colliding signatures are disambiguated by a counter assigned in
+    ``c14nN`` order, so nodes WL cannot yet tell apart inherit the very
+    instability WL exists to remove. The ``_N`` suffix is the visible
+    symptom, so assert on it directly.
+    """
+    quads = _canonical_quads(_uniform_chain_graph(20))
+
+    four_rounds = wl_blank_node_labels(quads, iterations=4)
+    fixpoint = wl_blank_node_labels(quads)
+
+    assert any("_" in label for label in four_rounds.values()), (
+        "4 rounds should leave this chain's middle nodes tied"
+    )
+    assert all("_" not in label for label in fixpoint.values()), (
+        "the fixpoint should separate them, so no collision counter is needed"
     )
