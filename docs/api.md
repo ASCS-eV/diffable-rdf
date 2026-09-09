@@ -184,6 +184,23 @@ IRI, the call logs a warning and re-serializes without them.
 **RDF/XML.** Literal carriage returns are written as `&#xD;` character
 references, so XML newline normalization cannot turn CR or CRLF into LF.
 
+**On the fallback path, every name above works**, and two names for one format
+produce identical bytes. Two of them get there differently: TriG renders as
+collection-free Turtle, which is valid TriG since Turtle is a subset of it,
+because rdflib's own TriG serializer needs a context-aware store that a
+canonicalized graph is not — and writing the triples into a *named* graph
+instead would invent a graph name the input never had. N-Quads goes into a
+Dataset's default graph for the same reason, and says exactly what N-Triples
+says.
+
+What the line-oriented formats cannot promise there is a clean reparse. A graph
+only reaches the fallback because it holds something N-Triples cannot express —
+a relative IRI, a literal predicate — which is precisely how it failed
+pyoxigraph's parse. So `nt` and `nquads` output for such a graph keeps every
+statement, in sorted order, with terms verbatim, but a strict parser will
+reject the line carrying the offending term. Use `turtle`, `trig`, `xml` or
+`json-ld` if the degraded output has to be read back.
+
 **JSON-LD.** The normal path serializes pyoxigraph's expanded JSON-LD and
 re-indents it so the document diffs line by line. When a graph reaches the
 fallback, the expanded document is written directly from the canonical triples:

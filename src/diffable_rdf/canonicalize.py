@@ -93,11 +93,41 @@ _JSON_FORMATS = frozenset({"json-ld", "jsonld", "application/ld+json"})
 # deliberately passed through verbatim and would fail an isomorphism test --
 # it is rendered without collection syntax instead. Explicit
 # rdf:first/rdf:rest can express any arrangement of cells, shared or not.
-# ``n3`` is included because rdflib's N3Serializer subclasses TurtleSerializer
-# and inherits its ``( … )`` rendering; rendering it through
-# _NoCollectionTurtleSerializer instead is sound because Turtle is a subset
-# of N3, so collection-free Turtle text is also valid N3.
-_COLLECTION_CAPABLE_FORMATS = frozenset({"turtle", "ttl", "n3"})
+# ``n3`` and ``trig`` are included because rdflib's N3Serializer and
+# TrigSerializer both subclass TurtleSerializer and inherit its ``( … )``
+# rendering; rendering them through _NoCollectionTurtleSerializer instead is
+# sound because Turtle is a subset of both, so collection-free Turtle text is
+# also valid N3 and valid TriG. For TriG that is additionally the only way it
+# works on this path at all: rdflib's own TrigSerializer requires a
+# context-aware store, which the canonicalized graph is not, and writing the
+# triples into a named graph instead would invent a graph name the input never
+# had. Emitting them as TriG's default graph is what the pyoxigraph path does
+# too.
+_COLLECTION_CAPABLE_FORMATS = frozenset({"turtle", "ttl", "n3", "trig"})
+
+# The plugin name rdflib registers for each format this library maps. Used only
+# on the degraded path, where serialization goes through rdflib rather than
+# pyoxigraph: rdflib's plugin lookup is exact, and several of the aliases
+# accepted here are this library's rather than rdflib's.
+_RDFLIB_SERIALIZER_NAMES: dict[ox.RdfFormat, str] = {
+    ox.RdfFormat.TURTLE: "turtle",
+    ox.RdfFormat.N_TRIPLES: "nt",
+    # N-Quads, deliberately not rdflib's ``nquads``. Its serializer needs a
+    # context-aware store, which a canonicalized graph is not, and satisfying
+    # that with a Dataset makes the output depend on how the installed rdflib
+    # spells the default graph: 6.3.2 writes an explicit
+    # ``<urn:x-rdflib:default>`` graph term where 7.6.0 leaves the slot empty.
+    # A single graph has no graph name to write, and the N-Quads grammar makes
+    # the graph label optional, so every N-Triples document is already a valid
+    # N-Quads document in the default graph. Emitting N-Triples is therefore
+    # both correct and version-independent, and matches the pyoxigraph path
+    # byte for byte.
+    ox.RdfFormat.N_QUADS: "nt",
+    ox.RdfFormat.RDF_XML: "xml",
+    ox.RdfFormat.TRIG: "trig",
+    ox.RdfFormat.N3: "n3",
+    ox.RdfFormat.JSON_LD: "json-ld",
+}
 
 # Formats that need the trailing-dot CURIE compatibility rewrite.
 _TURTLE_FAMILY_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfFormat.N3})
@@ -225,12 +255,15 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         # deterministic QName preallocation is needed by Turtle serializers.
         for prefix, namespace in graph.namespace_manager.namespaces():
             canonical.namespace_manager.bind(prefix, namespace, replace=True)
-        # rdflib's serializer lookup does not recognize its ``rdf/xml`` alias
-        # or mixed-case format names. Both public RDF/XML aliases map to the
-        # registered ``xml`` serializer on this degraded path as well.
+        # This library accepts more aliases than rdflib registers plugins for
+        # -- ``n-triples``, ``n-quads`` and ``rdf/xml`` are ours, not rdflib's,
+        # and its lookup is exact. Translate every mapped alias to the name
+        # rdflib knows, so two spellings of one format cannot behave
+        # differently here the way they used to.
+        ox_target = _FORMAT_MAP.get(output_format.lower())
         serializer_format = (
-            "xml"
-            if _FORMAT_MAP.get(output_format.lower()) == ox.RdfFormat.RDF_XML
+            _RDFLIB_SERIALIZER_NAMES.get(ox_target, output_format)
+            if ox_target is not None
             else output_format
         )
         serialized = canonical.serialize(format=serializer_format)
