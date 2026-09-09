@@ -59,12 +59,34 @@ Requires Python 3.10+, `rdflib>=6.3.2`, and `pyoxigraph>=0.5.4`.
 ## Usage
 
 ```python
+import os
+from pathlib import Path
+from tempfile import NamedTemporaryFile
+
 from rdflib import Graph
 from diffable_rdf import deterministic_turtle
 
-g = Graph().parse("ontology.ttl")
+path = Path("ontology.ttl")
+g = Graph().parse(path)
 ttl = deterministic_turtle(g)          # diff-stable, idiomatic Turtle
-open("ontology.ttl", "w", newline="\n").write(ttl)
+
+temporary_path = None
+try:
+    with NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        newline="\n",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        delete=False,
+    ) as temporary:
+        temporary_path = Path(temporary.name)
+        temporary.write(ttl)
+    os.replace(temporary_path, path)
+except BaseException:
+    if temporary_path is not None:
+        temporary_path.unlink(missing_ok=True)
+    raise
 ```
 
 Other entry points:
