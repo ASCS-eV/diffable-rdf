@@ -25,6 +25,7 @@ from rdflib.plugins.serializers.turtle import TurtleSerializer  # noqa: E402
 # The WL labelling primitive lives in diffable_rdf.wl so that tools which
 # already run RDFC-1.0 themselves can reuse it without this serializer.
 from diffable_rdf.wl import wl_blank_node_labels as _wl_signatures  # noqa: E402
+from diffable_rdf.graph_input import _require_single_graph  # noqa: E402
 from diffable_rdf.namespaces import prepare_namespaces  # noqa: E402
 
 
@@ -167,12 +168,18 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
     Parameters
     ----------
     graph : rdflib.Graph
-        An rdflib Graph to serialize.
+        A single rdflib Graph to serialize. Dataset and ConjunctiveGraph
+        containers are not supported; select an individual graph context.
 
     Returns
     -------
     str
         Deterministic Turtle string with ``@prefix`` declarations.
+
+    Raises
+    ------
+    TypeError
+        If ``graph`` is a Dataset or ConjunctiveGraph container.
 
     References
     ----------
@@ -181,6 +188,8 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
     .. [2] W3C (2014). "RDF 1.1 Turtle — Terse RDF Triple Language."
        W3C Recommendation.  https://www.w3.org/TR/turtle/
     """
+    _require_single_graph(graph)
+
     try:
         import pyoxigraph
     except ImportError as exc:
