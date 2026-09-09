@@ -1,12 +1,26 @@
 """diffable-rdf: deterministic, diff-stable serialization for rdflib graphs.
 
+Isomorphic inputs serialize to identical bytes, and an edit rewrites only the
+lines it touches, so RDF artifacts kept in version control show meaningful
+diffs instead of blank-node churn.
+
 Public API:
-    deterministic_turtle(graph)            -> diff-stable idiomatic Turtle
-    canonicalize_rdf_graph(graph, format)  -> RDFC-1.0 canonical serialization
-    deterministic_json(obj)                -> deterministically ordered JSON
-    well_known_prefix_map()                -> namespace IRI -> standard prefix
-    wl_blank_node_labels(quads)            -> diff-stable blank-node label map
-    wl_relabel_quads(quads)                -> canonical quads, diff-stably relabelled
+    deterministic_turtle(graph)
+        Diff-stable, idiomatic Turtle. The usual entry point.
+    canonicalize_rdf_graph(graph, output_format="turtle")
+        RDFC-1.0 canonical serialization in Turtle, N-Triples, N-Quads,
+        RDF/XML, TriG, N3 or JSON-LD.
+    deterministic_json(obj, indent=3, preserve_list_order_keys=None)
+        Deterministically ordered JSON, keeping arrays whose order carries
+        JSON-LD meaning.
+    well_known_prefix_map()
+        Namespace IRI -> standard prefix name, from rdflib's curated bindings.
+    wl_blank_node_labels(quads, iterations=None)
+        Diff-stable label for each blank node in canonical quads.
+    wl_relabel_quads(quads, iterations=None)
+        Those labels, applied to a new list of quads.
+
+Contracts, error cases and per-format behavior are documented in docs/api.md.
 """
 
 from __future__ import annotations

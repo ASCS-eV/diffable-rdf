@@ -4,6 +4,8 @@ This module provides a function to canonicalize an rdflib Graph using
 pyoxigraph's RDFC-1.0 implementation, producing deterministic output
 with stable blank node labels and sorted triples.
 
+See ``docs/api.md`` for the full contract.
+
 **Known limitations:**
 
 1. **xsd:string normalization**: pyoxigraph follows RDF 1.1, where plain
@@ -299,11 +301,11 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
 def _is_safe_prefix_iri(iri: str) -> bool:
     """Check whether a namespace IRI is safe for prefix serialization.
 
-    pyoxigraph rejects IRIs with invalid code-points (e.g. double ``#``),
-    and rdflib's Turtle parser cannot round-trip CURIEs whose namespace
-    contains query parameters or fragments in unexpected positions.  This
-    function returns ``False`` for such IRIs so they can be skipped during
-    prefix collection.
+    pyoxigraph rejects a prefix IRI with an invalid code point, such as one
+    carrying a second ``#``, and raising from a namespace binding the caller
+    cannot see would be a poor trade for a prefix declaration.  IRIs that do
+    not have the shape of a namespace are therefore skipped during prefix
+    collection: a skipped prefix only means its IRIs are written in full.
     """
     # A namespace IRI should end with '/' or '#'.  If '#' appears
     # *before* the final character, the IRI contains an embedded
