@@ -113,13 +113,3 @@ select = ["E", "F", "W", "B"]
 [tool.mypy]
 python_version = "3.10"
 files = ["src/diffable_rdf"]
-
-[[tool.mypy.overrides]]
-module = "diffable_rdf.canonicalize"
-# pyoxigraph's serialize() stub declares `-> bytes | None` unconditionally
-# (no overload keyed on the output= parameter), even though it only returns
-# None when a stream or path is passed for output=. canonicalize.py never
-# passes output=, so the result is always bytes at runtime. canonicalize.py
-# itself is out of scope for this change, so the mismatch is suppressed at
-# the module level rather than with an inline ignore in that file.
-disable_error_code = ["union-attr"]
