@@ -38,8 +38,17 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "rdflib>=6.0",
-    "pyoxigraph>=0.4.0",
+    # rdflib 6.3.2 is the first release where a bare Graph() binds rdflib's
+    # curated namespace set: the default for bind_namespaces was "core" (5
+    # namespaces) at 6.2.0 and 6.3.0, and became "rdflib" (28+) at 6.3.2.
+    # 6.3.2 is also the first release binding https://schema.org/ as "schema"
+    # rather than "sdo". well_known_prefix_map() needs both.
+    "rdflib>=6.3.2",
+    # pyoxigraph 0.5.4 is the first release exposing
+    # CanonicalizationAlgorithm.RDFC_1_0; 0.4.0-0.5.3 offer only UNSTABLE.
+    # 0.5.0 added the prefixes=/base_iri= arguments to serialize() and
+    # RdfFormat.JSON_LD, both also required.
+    "pyoxigraph>=0.5.4",
 ]
 
 [project.urls]
