@@ -14,9 +14,16 @@ already makes for N3. That matters for correctness, not just for the error:
 TrigSerializer inherits Turtle's ``( … )`` rendering, and this path has no
 round-trip guard to catch a detached list.
 
-N-Quads: rdflib's serializer needs a context-aware container, so the triples go
-into a Dataset's default graph -- which invents no graph name the input did not
-have, and matches what the pyoxigraph path writes.
+N-Quads: emitted as N-Triples, since the N-Quads graph label is optional and a
+single graph has no graph name -- so an N-Triples document is already a valid
+N-Quads document in the default graph.
+
+The line-oriented formats then turn out not to be able to carry a degraded
+graph at all: N-Triples and N-Quads accept only absolute IRIs (N-Triples 1.1
+section 2.2), and a graph reaches this path precisely because it holds
+something -- a relative IRI, a generalized term -- that N-Triples cannot
+express. They refuse with an actionable error rather than writing a file no
+parser will read; the Turtle family, RDF/XML and JSON-LD carry it fine.
 """
 
 from __future__ import annotations
@@ -99,14 +106,50 @@ def _resolved(graph: Graph) -> Graph:
     return resolved
 
 
-@pytest.mark.parametrize("output_format", ALL_ALIASES)
-def test_every_advertised_alias_serializes_on_the_degraded_path(output_format: str) -> None:
-    """No advertised name may raise here; three of them used to."""
+LINE_ORIENTED_ALIASES = ["nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"]
+CARRYING_ALIASES = [a for a in ALL_ALIASES if a not in LINE_ORIENTED_ALIASES]
+
+
+@pytest.mark.parametrize("output_format", CARRYING_ALIASES)
+def test_every_alias_that_can_carry_a_degraded_graph_does(output_format: str) -> None:
+    """No advertised name may fail for a reason of ours; three of them used to.
+
+    ``rdf/xml`` and the TriG and N3 spellings all raised ``PluginException`` or
+    a leaked rdflib error here before the alias table and the collection-free
+    TriG rendering landed.
+    """
     result = canonicalize_rdf_graph(_degraded_graph(), output_format=output_format)
     assert result.strip(), f"{output_format} returned empty output"
 
 
-@pytest.mark.parametrize("group", SYNONYM_GROUPS, ids=[g[0] for g in SYNONYM_GROUPS])
+@pytest.mark.parametrize("output_format", LINE_ORIENTED_ALIASES)
+def test_line_oriented_aliases_refuse_a_graph_they_cannot_represent(
+    output_format: str,
+) -> None:
+    """Refusing beats writing a file no parser will read.
+
+    rdflib's N-Triples serializer reuses Turtle's term rendering and does not
+    enforce the absolute-IRI rule, so it emits a relative IRI that its own
+    parser then rejects. The error has to say which term and what to use
+    instead.
+    """
+    with pytest.raises(ValueError) as raised:
+        canonicalize_rdf_graph(_degraded_graph(), output_format=output_format)
+
+    message = str(raised.value)
+    assert output_format in message
+    assert "relative/thing" in message, "the offending term must be named"
+    assert "absolute IRI" in message
+    assert "turtle" in message, "an alternative that works must be named"
+
+
+CARRYING_SYNONYM_GROUPS = [g for g in SYNONYM_GROUPS if g[0] not in LINE_ORIENTED_ALIASES]
+LINE_ORIENTED_SYNONYM_GROUPS = [g for g in SYNONYM_GROUPS if g[0] in LINE_ORIENTED_ALIASES]
+
+
+@pytest.mark.parametrize(
+    "group", CARRYING_SYNONYM_GROUPS, ids=[g[0] for g in CARRYING_SYNONYM_GROUPS]
+)
 def test_synonyms_for_one_format_produce_identical_bytes(group: tuple[str, ...]) -> None:
     """The actual defect: two names for one format behaving differently."""
     graph = _degraded_graph()
@@ -114,6 +157,24 @@ def test_synonyms_for_one_format_produce_identical_bytes(group: tuple[str, ...])
     first = outputs[group[0]]
     for name, result in outputs.items():
         assert result == first, f"{name} disagrees with {group[0]} on the degraded path"
+
+
+@pytest.mark.parametrize(
+    "group", LINE_ORIENTED_SYNONYM_GROUPS, ids=[g[0] for g in LINE_ORIENTED_SYNONYM_GROUPS]
+)
+def test_synonyms_refuse_for_the_same_reason(group: tuple[str, ...]) -> None:
+    """Agreeing on the refusal is the same contract as agreeing on the bytes."""
+    graph = _degraded_graph()
+    reasons = []
+    for name in group:
+        with pytest.raises(ValueError) as raised:
+            canonicalize_rdf_graph(graph, output_format=name)
+        message = str(raised.value)
+        assert message.startswith(f"{name} cannot represent"), message
+        # Compare what follows the format name, so "nt" inside "ntriples" is
+        # not mangled by a blind replace.
+        reasons.append(message.split(" cannot represent", 1)[1])
+    assert len(set(reasons)) == 1, f"{group} disagree on why they refuse"
 
 
 # Formats that can express this graph. N-Triples and N-Quads cannot: they
@@ -141,24 +202,6 @@ def test_degraded_output_preserves_the_graph(output_format: str) -> None:
     assert isomorphic(reparsed, _resolved(graph)), f"{output_format} did not preserve the graph"
 
 
-@pytest.mark.parametrize("output_format", ["nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"])
-def test_degraded_line_oriented_output_contains_every_statement(output_format: str) -> None:
-    """What the line-oriented formats can promise here: nothing is dropped.
-
-    They cannot promise a clean reparse, because the very thing that sent this
-    graph down the degraded path -- a relative IRI -- is not expressible in
-    N-Triples or N-Quads. So count statements instead of round-tripping, and
-    check the terms are present verbatim.
-    """
-    result = canonicalize_rdf_graph(_degraded_graph(), output_format=output_format)
-    lines = [line for line in result.splitlines() if line.strip()]
-
-    assert len(lines) == len(_degraded_graph())
-    assert "<relative/thing>" in result, "the relative IRI must be passed through verbatim"
-    assert '"forces fallback"' in result
-    assert '"shared"' in result and '"head"' in result
-
-
 def test_degraded_trig_states_list_structure_explicitly() -> None:
     """TriG inherits Turtle's ``( … )``, which cannot express a shared tail.
 
@@ -179,35 +222,46 @@ def test_degraded_trig_states_list_structure_explicitly() -> None:
     assert shared == reparsed.value(EX.b, EX.items), "the shared tail was detached"
 
 
-def test_degraded_nquads_states_exactly_what_ntriples_states() -> None:
-    """A single Graph has no graph names, so none may appear in the output.
+def test_line_oriented_output_still_works_when_the_graph_is_representable() -> None:
+    """The refusal is about the terms, not about the format or the path.
 
-    The N-Quads graph label is optional, so an N-Triples document is already a
-    valid N-Quads document in the default graph -- which makes byte equality
-    the right assertion, and keeps the output independent of how a given rdflib
-    spells a Dataset's default graph.
+    A graph of absolute IRIs does not reach the degraded path at all, so this
+    also pins that the guard has not disturbed the normal path: N-Quads and
+    N-Triples agree byte for byte there, because the N-Quads graph label is
+    optional and a single graph has no graph name to write.
     """
-    graph = _degraded_graph()
+    graph = Graph()
+    graph.bind("ex", EX)
+    graph.add((EX.s, EX.p, Literal("v")))
+
     quads = canonicalize_rdf_graph(graph, output_format="nquads")
     triples = canonicalize_rdf_graph(graph, output_format="nt")
 
     assert quads == triples
-    assert quads.endswith("\n")
-    # No graph term of any spelling, including the one rdflib 6.3.2 writes for
-    # a Dataset's default graph.
     assert "urn:x-rdflib:default" not in quads
+    assert quads.endswith("\n")
 
 
-def test_degraded_nquads_lines_are_sorted() -> None:
-    """N-Quads is line-oriented, which is what makes its output stable."""
-    result = canonicalize_rdf_graph(_degraded_graph(), output_format="nquads")
-    lines = [line for line in result.splitlines() if line.strip()]
-    assert lines == sorted(lines)
+def test_the_refusal_names_the_position_of_the_offending_term() -> None:
+    """A relative IRI can sit in any position; the message must say which."""
+    for position, triple in (
+        ("subject", (URIRef("relative/s"), EX.p, Literal("v"))),
+        ("object", (EX.s, EX.p, URIRef("relative/o"))),
+        ("predicate", (EX.s, URIRef("relative/p"), Literal("v"))),
+    ):
+        graph = Graph()
+        graph.add(triple)
+        with pytest.raises(ValueError) as raised:
+            canonicalize_rdf_graph(graph, output_format="nt")
+        assert position in str(raised.value), f"expected {position} in the message"
 
 
-@pytest.mark.parametrize("output_format", ["trig", "nquads", "n-quads", "n-triples"])
-def test_newly_working_degraded_formats_are_stable_across_processes(output_format: str) -> None:
-    """The formats this change enables must be as reproducible as the rest."""
+@pytest.mark.parametrize("output_format", ["turtle", "trig", "n3", "json-ld"])
+def test_degraded_formats_that_carry_the_graph_are_stable_across_processes(
+    output_format: str,
+) -> None:
+    """RDF/XML is deliberately absent: it is not stable here, and that is its own
+    finding rather than something this change introduced or fixes."""
     script = textwrap.dedent(
         """
         import sys

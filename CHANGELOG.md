@@ -48,6 +48,11 @@ affected artifact, commit it once, and subsequent runs are stable again.
 - **N-Quads and TriG work on the degraded path**, emitting N-Triples and
   collection-free Turtle respectively — each a valid document in its own format
   for a single graph, and neither inventing a graph name the input did not have.
+- **`nt` and `nquads` now raise for a graph they cannot represent** instead of
+  returning text no parser will read. Both accept only absolute IRIs, and a
+  graph takes the fallback precisely because it holds a term that is not one.
+  The error names the term and the formats that can carry the graph: `turtle`,
+  `trig`, `xml` and `json-ld` all work, since Turtle permits relative IRIs.
 
 ### Added
 
@@ -61,8 +66,9 @@ affected artifact, commit it once, and subsequent runs are stable again.
   loss: `Dataset` and `ConjunctiveGraph` containers raise `TypeError`, RDF/XML
   raises for characters XML 1.0 forbids, and degraded JSON-LD raises for
   generalized terms.
-- **Every advertised format name works on the degraded path**, and two names
-  for one format produce identical bytes.
+- **Every advertised format name is handled on the degraded path**, and two
+  names for one format behave identically — producing the same bytes where the
+  format can carry the graph, and refusing for the same reason where it cannot.
 - Lint, type-check and coverage gates; a job that resolves the declared
   dependency floors and runs the suite against them; a check that the committed
   lockfile is not stale.

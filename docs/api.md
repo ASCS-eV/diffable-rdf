@@ -217,13 +217,18 @@ instead would invent a graph name the input never had. N-Quads goes into a
 Dataset's default graph for the same reason, and says exactly what N-Triples
 says.
 
-What the line-oriented formats cannot promise there is a clean reparse. A graph
-only reaches the fallback because it holds something N-Triples cannot express —
-a relative IRI, a literal predicate — which is precisely how it failed
-pyoxigraph's parse. So `nt` and `nquads` output for such a graph keeps every
-statement, in sorted order, with terms verbatim, but a strict parser will
-reject the line carrying the offending term. Use `turtle`, `trig`, `xml` or
-`json-ld` if the degraded output has to be read back.
+**The line-oriented formats refuse a graph they cannot represent.** N-Triples
+and N-Quads accept only absolute IRIs — "IRIs may be written only as absolute
+IRIs", N-Triples 1.1 §2.2 — and a graph reaches the fallback precisely because
+it holds a term that is not one. `nt` and `nquads` therefore raise
+`ValueError`, naming the offending term, its position, and the formats that can
+carry the graph. Turtle is laxer, permitting relative IRIs against a base,
+which is why `turtle`, `trig`, `xml` and `json-ld` all work here.
+
+Refusing is deliberate. rdflib's N-Triples serializer reuses Turtle's term
+rendering and does not enforce the absolute-IRI rule, so it will write a
+relative IRI that its own parser then rejects — a file that looks fine and no
+parser will read. An error naming the term is more useful than that file.
 
 **JSON-LD.** The normal path serializes pyoxigraph's expanded JSON-LD and
 re-indents it so the document diffs line by line. When a graph reaches the
