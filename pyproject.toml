@@ -83,3 +83,29 @@ testpaths = ["tests"]
 # Import the package from src/ without requiring an install, so a fresh
 # clone can run `pytest` as its first command.
 pythonpath = ["src"]
+
+[tool.ruff]
+# The longest existing line in src/ is 109 chars and in tests/ is 120, so
+# this fits the code as written -- the gate is here to catch new problems,
+# not to trigger a repo-wide reformat.
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+# Deliberately conservative. `I` (import sorting) is left out because
+# src/diffable_rdf/turtle.py positions imports after module-level statements
+# on purpose -- that is what the existing `# noqa: E402` markers document --
+# and enabling it would fight that layout. Revisit as its own change.
+# `UP` (pyupgrade) is left out because its only finding, UP037, wants to
+# unquote the forward-referenced annotations in turtle.py at three sites;
+# two are outside this plan's two sanctioned turtle.py edits, and the third
+# (isValidList's `l_: "Node"`) is kept quoted on purpose to match rdflib's
+# own signature for the method being overridden. Revisit as its own change.
+select = ["E", "F", "W", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Pre-existing unused imports. Fixing them means editing these test files,
+# which is out of scope for this plan (no test file changes beyond the new
+# tests/conftest.py).
+"tests/test_canonicalization_properties.py" = ["F401"]
+"tests/test_diffable_rdf.py" = ["F401"]
