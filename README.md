@@ -193,6 +193,16 @@ interpreter processes*, since the failure mode being guarded against —
 rdflib's run-local blank-node identifiers, and rdflib's set-iteration
 node ordering — is invisible within a single process.
 
+Degraded JSON-LD is emitted as expanded node objects with explicit `@id`
+references. It does not infer `@list` values or inline blank nodes, so shared
+nodes and cycles retain their identity. Relative IRIs in subject and object
+positions remain verbatim and resolve only when a consumer supplies a document
+base. Predicates and literal datatypes must be absolute IRIs. Literal or blank
+node predicates, literal subjects, unsupported node kinds, and URI references
+whose text begins with `_:` raise `ValueError`. This policy keeps the fallback
+within an interoperable standard-RDF subset; it does not depend on optional
+generalized-RDF processing modes.
+
 ### Normalizations applied
 
 Canonicalization is not byte-preserving; two inputs that denote the same

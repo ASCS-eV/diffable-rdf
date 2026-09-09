@@ -12,9 +12,10 @@ with stable blank node labels and sorted triples.
    re-parses the output with rdflib will see ``Literal("x")`` (datatype
    ``None``) rather than ``Literal("x", datatype=XSD.string)``.
 
-2. **Non-standard RDF**: Graphs with literal predicates (e.g. SHACL
-   annotation mode) are rejected by pyoxigraph.  This function falls
-   back to rdflib's serializer for such graphs.
+2. **Non-standard RDF**: Graphs with relative IRIs or generalized RDF terms
+   are rejected by pyoxigraph. This function uses a deterministic rdflib
+   fallback with format-specific policies. Degraded JSON-LD emits an
+   interoperable standard-RDF subset and rejects terms outside that subset.
 
 3. **Numeric short forms**: pyoxigraph uses Turtle short forms for
    ``xsd:integer`` (``42``), ``xsd:boolean`` (``true``), and
@@ -44,6 +45,7 @@ import rdflib
 from rdflib import Graph
 from rdflib.compare import to_canonical_graph
 
+from .expanded_jsonld import serialize_expanded_jsonld
 from .graph_input import _require_single_graph
 from .jsonld import deterministic_json
 from .namespaces import prepare_namespaces
@@ -179,6 +181,11 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
     :return: Deterministic string serialization of the graph.
     """
+    if output_format.lower() in _JSON_FORMATS:
+        # Expanded node objects preserve shared blank nodes and cycles. The
+        # rdflib JSON-LD serializer may compact them into recursive @list
+        # values, which cannot retain shared list-cell identity.
+        return serialize_expanded_jsonld(to_canonical_graph(graph))
     if output_format.lower() in _COLLECTION_CAPABLE_FORMATS:
         canonicalized = to_canonical_graph(graph)
         # to_canonical_graph creates a Graph() with rdflib's built-in
@@ -216,13 +223,6 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
         lines = [line for line in serialized.splitlines() if line.strip()]
         return "\n".join(sorted(lines)) + "\n"
-    if output_format.lower() in _JSON_FORMATS:
-        # rdflib's JSON-LD serializer emits node objects in a set-iteration
-        # order that varies between processes.  This has to live here rather
-        # than in the caller: JSON-LD reaches this function from the
-        # unsupported-format branch *and* from the SyntaxError branch, and
-        # only one of those used to apply it.
-        return deterministic_json(json.loads(serialized)) + "\n"
     return serialized
 
 
@@ -386,8 +386,10 @@ def canonicalize_rdf_graph(
     Prefix bindings from the rdflib Graph are preserved in the output
     for formats that support them (Turtle, TriG, N3, RDF/XML).
 
-    Falls back to plain rdflib serialization for unsupported formats or
-    graphs containing non-standard RDF (e.g. literal predicates).
+    Falls back to deterministic rdflib-based serialization for unsupported
+    formats or graphs containing terms pyoxigraph cannot parse. Degraded
+    JSON-LD preserves relative subject and object IRIs verbatim, while term
+    positions outside its interoperable standard-RDF subset raise ``ValueError``.
 
     :param graph: A single rdflib Graph to serialize. Dataset and
         ConjunctiveGraph containers are not supported; select an individual
