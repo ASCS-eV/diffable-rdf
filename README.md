@@ -201,6 +201,11 @@ RDF graph are deliberately mapped onto the same output:
 - **Other typed literal lexical forms are preserved exactly.** This includes
   numeric precision and distinct spellings with equal values, such as integer
   `"01"`/`"1"`, boolean `"1"`/`"true"`, and dateTime `Z`/`+00:00`.
+- **RDF/XML preserves literal carriage returns exactly.** Raw CR characters are
+  written as XML character references so XML newline normalization cannot turn
+  CR or CRLF into LF. RDF terms containing characters forbidden by XML 1.0,
+  such as `U+0001`, raise a clear `ValueError` instead of emitting invalid or
+  lossy RDF/XML.
 - **Prefix declarations are filtered** to the namespaces the graph
   actually uses, so unused bindings do not appear in the output. Caller
   prefix names take precedence, and otherwise-generated `ns1`, `ns2`, ...

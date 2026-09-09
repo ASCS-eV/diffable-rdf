@@ -30,7 +30,8 @@ with stable blank node labels and sorted triples.
    ``prefix:local\\.`` for IRIs whose local part ends with ``.``.  This
    is valid Turtle (PN_LOCAL_ESC), but rdflib's notation3 parser rejects
    it because it conflicts with the statement-terminator dot.  We
-   post-process the output to expand such CURIEs to full ``<IRI>`` form.
+   post-process Turtle-family output to expand such CURIEs to full ``<IRI>``
+   form.
 """
 
 import io
@@ -88,17 +89,62 @@ _JSON_FORMATS = frozenset({"json-ld", "jsonld", "application/ld+json"})
 # of N3, so collection-free Turtle text is also valid N3.
 _COLLECTION_CAPABLE_FORMATS = frozenset({"turtle", "ttl", "n3"})
 
+# Formats that need the trailing-dot CURIE compatibility rewrite.
+_TURTLE_FAMILY_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfFormat.N3})
+
 # Formats whose output is verified against the input before being returned.
-# RDF/XML is excluded not because it escapes text post-processing -- it does
-# not: _expand_trailing_dot_curies runs on it too, since ox.RdfFormat.RDF_XML
-# is in _PREFIX_FORMATS -- but because literals containing XML-illegal
-# control characters cannot be represented in RDF/XML at all, so a
-# round-trip check there would fail for a reason that is a limitation of the
-# format rather than a defect of this library. This leaves RDF/XML's text
-# post-processing unverified, a known gap. N-Triples and N-Quads are
-# excluded because they have no compact list syntax and receive no text
+# N-Triples and N-Quads have no compact list syntax and receive no text
 # post-processing.
-_VERIFIED_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfFormat.N3})
+_VERIFIED_FORMATS = _TURTLE_FAMILY_FORMATS | {ox.RdfFormat.RDF_XML}
+
+
+def _xml_10_forbidden_code_point(text: str) -> int | None:
+    """Return the first code point that XML 1.0 cannot represent, if any."""
+    for character in text:
+        code_point = ord(character)
+        if not (
+            code_point in (0x09, 0x0A, 0x0D)
+            or 0x20 <= code_point <= 0xD7FF
+            or 0xE000 <= code_point <= 0xFFFD
+            or 0x10000 <= code_point <= 0x10FFFF
+        ):
+            return code_point
+    return None
+
+
+def _assert_xml_10_text_representable(text: str) -> None:
+    """Raise clearly when text contains a character forbidden by XML 1.0."""
+    forbidden = _xml_10_forbidden_code_point(text)
+    if forbidden is not None:
+        raise ValueError(
+            "RDF/XML uses XML 1.0, which cannot represent "
+            f"character U+{forbidden:04X} in RDF graph data."
+        )
+
+
+def _assert_xml_10_representable(graph: rdflib.Graph) -> None:
+    """Raise clearly when graph data cannot be represented in RDF/XML 1.0."""
+    for subject, predicate, object_ in graph:
+        for term in (subject, predicate, object_):
+            _assert_xml_10_text_representable(str(term))
+            if isinstance(term, rdflib.Literal):
+                if term.language:
+                    _assert_xml_10_text_representable(term.language)
+                if term.datatype:
+                    _assert_xml_10_text_representable(str(term.datatype))
+    if graph.base:
+        _assert_xml_10_text_representable(str(graph.base))
+
+
+def _finalize_rdf_xml(serialized: str) -> str:
+    """Protect literal CR characters from XML 1.0 newline normalization.
+
+    A character reference is not normalized by XML parsers. Replacing only
+    raw CR characters preserves both CR and CRLF RDF literal values without
+    touching serializer-produced markup, ordinary LF, or existing escapes.
+    """
+    _assert_xml_10_text_representable(serialized)
+    return serialized.replace("\r", "&#xD;")
 
 
 def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -> str:
@@ -157,7 +203,15 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         # deterministic QName preallocation is needed by Turtle serializers.
         for prefix, namespace in graph.namespace_manager.namespaces():
             canonical.namespace_manager.bind(prefix, namespace, replace=True)
-        serialized = canonical.serialize(format=output_format)
+        # rdflib's serializer lookup does not recognize its ``rdf/xml`` alias
+        # or mixed-case format names. Both public RDF/XML aliases map to the
+        # registered ``xml`` serializer on this degraded path as well.
+        serializer_format = (
+            "xml"
+            if _FORMAT_MAP.get(output_format.lower()) == ox.RdfFormat.RDF_XML
+            else output_format
+        )
+        serialized = canonical.serialize(format=serializer_format)
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
         lines = [line for line in serialized.splitlines() if line.strip()]
         return "\n".join(sorted(lines)) + "\n"
@@ -282,6 +336,8 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     expected = _rdfc_canonical_form(source, ox)
     if expected is None:
         return
+    ox_format = _FORMAT_MAP[output_format.lower()]
+    rdflib_format = "xml" if ox_format == ox.RdfFormat.RDF_XML else output_format.lower()
     reparsed = rdflib.Graph()
     try:
         # rdflib's parser plugin lookup is case-sensitive ("Turtle" is not
@@ -292,7 +348,7 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
         # mixed-case alias that pyoxigraph accepted does not misreport a
         # plugin-name miss as a round-trip failure. The original spelling is
         # kept in the messages below, since that is what the caller passed.
-        reparsed.parse(data=serialized, format=output_format.lower())
+        reparsed.parse(data=serialized, format=rdflib_format)
     except Exception as exc:
         raise ValueError(
             f"canonical {output_format} serialization does not parse back "
@@ -302,7 +358,6 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     # rdflib parsing above is an interoperability check only. It normalizes
     # numeric lexical forms, so use pyoxigraph's parsed terms for the exact
     # identity comparison.
-    ox_format = _FORMAT_MAP[output_format.lower()]
     try:
         actual = _rdfc_canonical_text(serialized, ox_format, ox)
     except SyntaxError as exc:
@@ -350,6 +405,9 @@ def canonicalize_rdf_graph(
         data = _deterministic_fallback_serialize(graph, output_format)
         return data.rstrip("\n") + "\n" if data.endswith("\n") else data
 
+    if ox_format == ox.RdfFormat.RDF_XML:
+        _assert_xml_10_representable(graph)
+
     # 1. Transfer rdflib graph to pyoxigraph via N-Triples.
     nt_data = graph.serialize(format="nt")
     nt_bytes = nt_data.encode("utf-8") if isinstance(nt_data, str) else nt_data
@@ -366,7 +424,8 @@ def canonicalize_rdf_graph(
             "deterministic (blank-node labels are canonicalized via rdflib) but is not "
             "canonicalized with pyoxigraph RDFC-1.0."
         )
-        return _deterministic_fallback_serialize(graph, output_format)
+        result = _deterministic_fallback_serialize(graph, output_format)
+        return _finalize_rdf_xml(result) if ox_format == ox.RdfFormat.RDF_XML else result
 
     dataset = ox.Dataset()
     for triple in triples:
@@ -438,6 +497,8 @@ def canonicalize_rdf_graph(
     # overload distinguishing output=None (returns bytes) from output=<stream>
     # (returns None). Neither call above passes output=, so this is always bytes.
     result = result_bytes.decode("utf-8")  # type: ignore[union-attr]
+    if ox_format == ox.RdfFormat.RDF_XML:
+        result = _finalize_rdf_xml(result)
     if ox_format == ox.RdfFormat.JSON_LD:
         # pyoxigraph emits compact single-line JSON; re-render it indented so
         # the output is diffable line by line, which is the point of this
@@ -445,7 +506,7 @@ def canonicalize_rdf_graph(
         # *expanded* JSON-LD, so there is no @context or @list array whose
         # order carries meaning, and the triples were already sorted above.
         result = deterministic_json(json.loads(result)) + "\n"
-    if ox_format in _PREFIX_FORMATS and used_prefixes:
+    if ox_format in _TURTLE_FAMILY_FORMATS and used_prefixes:
         result = _expand_trailing_dot_curies(result, used_prefixes)
     if ox_format in _VERIFIED_FORMATS:
         _assert_round_trips(graph, result, output_format)
