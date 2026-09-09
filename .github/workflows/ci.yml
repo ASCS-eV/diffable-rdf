@@ -50,7 +50,11 @@ jobs:
 
       - name: Install at the lowest permitted direct versions
         run: |
-          uv venv
+          # setup-uv with a python-version already creates and exports a .venv,
+          # so a bare `uv venv` exits 2 with "A virtual environment already
+          # exists". --clear is correct either way: it creates one when absent
+          # and replaces the action's when present, using UV_PYTHON (3.10).
+          uv venv --clear
           uv pip install --resolution lowest-direct -e . "pytest>=8.0"
 
       - name: Show what resolved
