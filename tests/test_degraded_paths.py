@@ -14,6 +14,7 @@ on the degraded paths.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import textwrap
@@ -552,38 +553,51 @@ def test_canonicalize_rdf_graph_raises_rather_than_emitting_unparseable_turtle()
 
 
 def test_degraded_json_ld_is_reproducible_across_processes() -> None:
-    """JSON-LD must stay byte-reproducible on the degraded path too.
-
-    Routing JSON-LD through pyoxigraph means a graph pyoxigraph *cannot*
-    parse now reaches the SyntaxError fallback, which returns rdflib's raw
-    JSON-LD -- and rdflib emits node objects in a set-iteration order that
-    varies between processes. The existing cross-process test uses a graph
-    pyoxigraph parses happily, so it never exercises this branch; without
-    this test the same graph produced five different outputs in five
-    interpreters.
-    """
+    """Relative-node JSON-LD stays stable across labels, order, and hash seeds."""
     script = textwrap.dedent(
         """
-        from rdflib import Graph, Literal, Namespace
+        from rdflib import BNode, Graph, Literal, Namespace, URIRef
         from diffable_rdf import canonicalize_rdf_graph
         import sys
         EX = Namespace("http://example.org/")
+        seed = int(sys.argv[1])
         g = Graph()
         g.bind("ex", EX)
-        for i in range(4):
-            g.add((EX[f"s{i}"], EX.p, Literal(f"v{i}")))
-        # a literal predicate is what pyoxigraph rejects, forcing the fallback
-        g.addN([(EX.s0, Literal("literal-predicate"), Literal("x"), g)])
+        shared = BNode(f"input-{seed}")
+        triples = [
+            (EX.a, EX.ref, shared),
+            (EX.b, EX.ref, shared),
+            (shared, EX.value, Literal("shared")),
+            (URIRef("relative/subject"), EX.p, Literal("fallback")),
+        ]
+        if seed % 2:
+            triples.reverse()
+        for triple in triples:
+            g.add(triple)
         sys.stdout.write(canonicalize_rdf_graph(g, output_format="json-ld"))
         """
     )
     runs = {
         subprocess.run(
-            [sys.executable, "-c", script], capture_output=True, text=True, check=True
+            [sys.executable, "-c", script, str(seed)],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "PYTHONHASHSEED": str(seed)},
         ).stdout
-        for _ in range(5)
+        for seed in (1, 7, 23, 101, 997)
     }
     assert len(runs) == 1, "degraded json-ld is not reproducible across processes"
+
+
+def test_degraded_json_ld_rejects_literal_predicates() -> None:
+    """JSON-LD reports a generalized predicate instead of dropping its triple."""
+    graph = Graph()
+    graph.add((EX.s, EX.p, Literal("kept")))
+    graph.addN([(EX.s, Literal("literal-predicate"), Literal("unsupported"), graph)])
+
+    with pytest.raises(ValueError, match="JSON-LD.*predicate.*Literal"):
+        canonicalize_rdf_graph(graph, output_format="json-ld")
 
 
 @pytest.mark.parametrize("output_format", ["Turtle", "TTL", "N3"])
