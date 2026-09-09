@@ -88,16 +88,24 @@ well_known_prefix_map()                    # namespace IRI -> standard prefix na
 | `wl_blank_node_labels(quads, iterations=None) -> dict[str, str]` | Diff-stable label for each blank node, from canonical pyoxigraph quads. |
 | `wl_relabel_quads(quads, iterations=None) -> list` | The same labels, already applied to the quads. |
 
-`iterations=None` (the default) refines until the labelling stops changing —
-the Weisfeiler-Lehman fixpoint. Stopping early leaves structurally distinct
-blank nodes sharing a signature, and those ties are broken in RDFC-1.0's
-`c14nN` order, which reintroduces exactly the instability the labels exist to
-remove. Pass an explicit integer only if you need a fixed round count.
+`iterations=None` (the default) refines each connected blank-node component
+independently until its partition stops changing — the Weisfeiler-Lehman
+fixpoint. Stopping early leaves structurally distinct blank nodes sharing a
+signature, and those ties are broken in RDFC-1.0's `c14nN` order, which
+reintroduces exactly the instability the labels exist to remove. Pass an
+explicit integer only if you need a fixed round count across the whole dataset.
 
 Because a node's label is derived from its whole connected blank-node
 structure, an edit *inside* one large connected structure can relabel all of
 it. Diff stability comes from isolating unrelated regions of the graph from
-each other, not from isolating parts of a single interconnected one.
+each other, not from isolating parts of a single interconnected one. Each
+region now stops refining at its own fixpoint, so a deeper disconnected region
+cannot change the number of times an already-stable region is hashed.
+
+This component-local convergence correction causes a one-time label change in
+existing output whose disconnected blank-node components previously converged
+after different numbers of rounds. Regenerate and commit those affected
+artifacts once; subsequent unrelated component edits preserve their labels.
 
 For quad datasets, a blank node's label also depends on which graph its
 statements are in, so the same structure in two named graphs is labelled

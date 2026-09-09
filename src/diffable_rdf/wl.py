@@ -51,9 +51,10 @@ def wl_blank_node_labels(
         Canonical quads from pyoxigraph (i.e. after RDFC-1.0).
     iterations : int | None
         Number of WL refinement rounds.  The default (``None``) refines
-        until the partition stops changing (the WL fixpoint), which
-        yields the most diff-stable labelling; pass an explicit integer
-        to force exactly that many rounds.
+        each connected blank-node component until its partition stops
+        changing (the WL fixpoint), which yields the most diff-stable
+        labelling; pass an explicit integer to force exactly that many
+        rounds across the whole dataset.
 
     Returns
     -------
@@ -104,6 +105,11 @@ def wl_blank_node_labels(
     incoming: dict[str, list[tuple[str, str, str, bool]]] = {}
     # naming[b] = signature fragments for the quads that blank node b names
     naming: dict[str, list[str]] = {}
+    # Neighbours whose previous-round signatures feed each other's next
+    # signature. Named nodes are stable anchors, not paths between blank-node
+    # regions. Blank graph names also stay local: graph tags and naming
+    # fragments deliberately contain only a constant marker for blank nodes.
+    neighbours: dict[str, set[str]] = {}
 
     def graph_tag(graph_name) -> str:
         """A stable, blank-node-free key for the graph a quad lives in.
@@ -145,6 +151,9 @@ def wl_blank_node_labels(
         if o_is_bn:
             bnode_ids.add(o.value)
             incoming.setdefault(o.value, []).append((s.value if s_is_bn else str(s), p_str, tag, s_is_bn))
+        if s_is_bn and o_is_bn:
+            neighbours.setdefault(s.value, set()).add(o.value)
+            neighbours.setdefault(o.value, set()).add(s.value)
 
     def edge(direction: str, label: str, value: str, tag: str) -> str:
         """One signature fragment, carrying the graph tag only when there is one."""
@@ -172,31 +181,58 @@ def wl_blank_node_labels(
     # the identical partition (see the module tests) at constant size.
     #
     # WL refinement is monotone: a node's new signature always embeds its
-    # previous one, so the partition can only get finer and the number of
-    # distinct signatures never decreases.  Once that count stops growing
-    # the partition is stable and further rounds cannot change it, so the
-    # fixpoint is both the cheapest and the most diff-stable stopping
-    # point.  A partition of n nodes can refine at most n times, which
-    # bounds the loop even for adversarial input.
-    max_rounds = len(bnode_ids) if iterations is None else iterations
-    previous_classes = len(set(sig.values()))
-    for _ in range(max_rounds):
-        new_sig: dict[str, str] = {}
-        for bid in bnode_ids:
-            parts = [sig[bid]]
-            for p_str, o_str, tag, o_is_bn in outgoing.get(bid, []):
-                if o_is_bn:
-                    parts.append(edge("+", p_str, sig.get(o_str, ""), tag))
-            for s_str, p_str, tag, s_is_bn in incoming.get(bid, []):
-                if s_is_bn:
-                    parts.append(edge("-", sig.get(s_str, ""), p_str, tag))
-            new_sig[bid] = hashlib.sha256("|".join(sorted(parts)).encode("utf-8")).hexdigest()
-        sig = new_sig
-        if iterations is None:
-            classes = len(set(sig.values()))
-            if classes == previous_classes:
-                break
-            previous_classes = classes
+    # previous one, so a component's partition can only get finer. Once its
+    # number of classes stops growing, further rounds cannot change that
+    # partition. Refining components independently prevents a deep unrelated
+    # component from repeatedly rehashing one whose partition is already
+    # stable. A component of n nodes can refine at most n times, which also
+    # provides a finite bound for adversarial input.
+    def refine(component: set[str], rounds: int, stop_at_fixpoint: bool) -> None:
+        previous_classes = len({sig[bid] for bid in component})
+        for _ in range(rounds):
+            # Build every new value from the same previous-round mapping.
+            # Updating sig only after this loop keeps refinement synchronous.
+            new_sig: dict[str, str] = {}
+            for bid in component:
+                parts = [sig[bid]]
+                for p_str, o_str, tag, o_is_bn in outgoing.get(bid, []):
+                    if o_is_bn:
+                        parts.append(edge("+", p_str, sig.get(o_str, ""), tag))
+                for s_str, p_str, tag, s_is_bn in incoming.get(bid, []):
+                    if s_is_bn:
+                        parts.append(edge("-", sig.get(s_str, ""), p_str, tag))
+                new_sig[bid] = hashlib.sha256(
+                    "|".join(sorted(parts)).encode("utf-8")
+                ).hexdigest()
+            sig.update(new_sig)
+            if stop_at_fixpoint:
+                classes = len(set(new_sig.values()))
+                if classes == previous_classes:
+                    break
+                previous_classes = classes
+
+    if iterations is not None:
+        # An explicit count retains the historical contract: every blank node
+        # is synchronously refined for exactly the requested number of rounds.
+        refine(bnode_ids, iterations, stop_at_fixpoint=False)
+    else:
+        visited: set[str] = set()
+        # One seed pass keeps discovery linear even when every node is an
+        # isolated component. Component order cannot affect independent
+        # refinement, and collision suffixes are assigned globally below.
+        for seed in bnode_ids:
+            if seed in visited:
+                continue
+            component: set[str] = set()
+            pending = [seed]
+            while pending:
+                bid = pending.pop()
+                if bid in visited:
+                    continue
+                visited.add(bid)
+                component.add(bid)
+                pending.extend(neighbours.get(bid, set()) - visited)
+            refine(component, len(component), stop_at_fixpoint=True)
 
     # Convert signatures to truncated SHA-256 hashes.
     hash_map: dict[str, str] = {}
