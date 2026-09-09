@@ -206,7 +206,10 @@ IRI is handed to pyoxigraph, which emits a `@base` directive and RFC
 IRI, the call logs a warning and re-serializes without them.
 
 **RDF/XML.** Literal carriage returns are written as `&#xD;` character
-references, so XML newline normalization cannot turn CR or CRLF into LF.
+references, so XML newline normalization cannot turn CR or CRLF into LF. On the
+fallback path the `rdf:Description` elements and the property elements within
+them are sorted, because rdflib's RDF/XML serializer orders both by its own
+graph traversal and RDF/XML gives neither order any meaning.
 
 **On the fallback path, every name above works**, and two names for one format
 produce identical bytes. Two of them get there differently: TriG renders as
