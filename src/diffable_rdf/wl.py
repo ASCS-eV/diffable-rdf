@@ -54,8 +54,10 @@ def wl_blank_node_labels(
         Number of WL refinement rounds.  The default (``None``) refines
         each connected blank-node component until its partition stops
         changing (the WL fixpoint), which yields the most diff-stable
-        labelling.  An explicit integer forces exactly that many rounds
-        across the whole dataset; ``0`` or a negative number runs none.
+        labelling.  A non-negative integer forces exactly that many rounds
+        across the whole dataset; ``0`` is a meaningful request for no
+        refinement, leaving each label derived from its named-node edges
+        alone.  A negative count is rejected.
 
     Returns
     -------
@@ -63,6 +65,14 @@ def wl_blank_node_labels(
         Mapping from canonical blank-node ID (e.g. ``c14n42``) to a
         truncated SHA-256 hash suitable for use as a stable blank-node
         label (e.g. ``b1f3a9c0d2e4``).
+
+    Raises
+    ------
+    ValueError
+        If ``iterations`` is negative.  ``range`` treats a negative count as
+        zero, so such a call used to be accepted and return labels refined for
+        no rounds at all -- plausible-looking, stable across processes, and
+        less diff-stable than the caller believed, with nothing to say so.
 
     Notes
     -----
@@ -97,6 +107,13 @@ def wl_blank_node_labels(
     by the collision counter in ``c14nN`` order, exactly as for genuinely
     indistinguishable nodes.
     """
+    if iterations is not None and iterations < 0:
+        raise ValueError(
+            f"iterations must be None or a non-negative integer, got {iterations!r}. "
+            "Pass None to refine each component to its fixpoint, which is the most "
+            "diff-stable labelling, or 0 for no refinement."
+        )
+
     # Collect all blank node IDs and build adjacency index.
     bnode_ids: set[str] = set()
     # outgoing[b] = list of (predicate_str, object_str_or_bnode_id, graph_tag, is_bnode)
@@ -213,8 +230,9 @@ def wl_blank_node_labels(
     if iterations is not None:
         # An explicit count means exactly that: every blank node is refined
         # synchronously for the requested number of rounds, with no
-        # per-component fixpoint check. A count of zero or less refines
-        # nothing, leaving each label derived from its named-node edges.
+        # per-component fixpoint check. Zero refines nothing, leaving each
+        # label derived from its named-node edges; negative counts are
+        # rejected above rather than silently behaving like zero.
         refine(bnode_ids, iterations, stop_at_fixpoint=False)
     else:
         visited: set[str] = set()

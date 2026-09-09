@@ -356,11 +356,11 @@ nodes.
 - `quads` — a list of `pyoxigraph.Quad`, canonicalized with
   `Dataset.canonicalize(CanonicalizationAlgorithm.RDFC_1_0)`.
 - `iterations` — refinement rounds. `None`, the default, refines each connected
-  blank-node component until its own partition stops changing. An explicit
-  integer runs exactly that many synchronous rounds across every blank node;
-  `0` or a negative number therefore runs none, leaving each label derived from
-  its named-node edges alone. Pass `None` unless a fixed round count is a
-  requirement of your own.
+  blank-node component until its own partition stops changing. A non-negative
+  integer runs exactly that many synchronous rounds across every blank node, so
+  `0` runs none and leaves each label derived from its named-node edges alone.
+  A negative count raises `ValueError`. Pass `None` unless a fixed round count
+  is a requirement of your own.
 
 **Returns.** `dict[str, str]`, from canonical blank-node identifier (`c14n0`,
 `c14n1`, …) to a label `b` plus 12 hex digits. Structurally indistinguishable
