@@ -62,6 +62,8 @@ in another order, or with the blank nodes renamed — produces the same bytes.
 
 Full signatures, error cases and per-format behavior are in the
 [API guide](https://github.com/ASCS-eV/diffable-rdf/blob/main/docs/api.md).
+Changes that affect the bytes this library emits are listed in the
+[changelog](https://github.com/ASCS-eV/diffable-rdf/blob/main/CHANGELOG.md).
 
 ## Limits worth knowing before you start
 
