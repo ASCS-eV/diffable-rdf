@@ -26,6 +26,7 @@ import subprocess
 import sys
 import textwrap
 
+import pyoxigraph as ox
 import pytest
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.compare import isomorphic
@@ -125,34 +126,21 @@ def _random_graph(seed: int) -> Graph:
     return graph
 
 
-def _rdf11_literals(graph: Graph) -> Graph:
-    """The graph with literals reduced to RDF 1.1 identity.
+def _canonical_dataset(dataset: ox.Dataset) -> str:
+    dataset.canonicalize(ox.CanonicalizationAlgorithm.RDFC_1_0)
+    return "\n".join(
+        sorted(str(ox.Triple(quad.subject, quad.predicate, quad.object)) for quad in dataset)
+    )
 
-    Two normalisations, both required for a fair comparison rather than to paper over a defect:
 
-    * ``"a"^^xsd:string`` and ``"a"`` are the *same* literal in RDF 1.1 (Concepts, Sec. 3.3),
-      and pyoxigraph follows that, so the canonical form never writes the explicit datatype.
-      rdflib keeps them as distinct terms, so an isomorphism check would report a difference
-      that does not exist.
-    * numeric literals may come back in a different but equivalent lexical form - ``1.0`` and
-      ``1.0E0`` are the same ``xsd:double`` - because Turtle permits short forms.
+def _canonical_graph(graph: Graph) -> str:
+    return _canonical_dataset(
+        ox.Dataset(ox.parse(graph.serialize(format="nt"), format=ox.RdfFormat.N_TRIPLES))
+    )
 
-    Anything else is compared exactly.
-    """
-    out = Graph()
 
-    def norm(term):
-        if not isinstance(term, Literal):
-            return term
-        if term.datatype == XSD.string:
-            return Literal(str(term))
-        if term.datatype in (XSD.double, XSD.decimal, XSD.integer, XSD.float) and term.value is not None:
-            return Literal(term.value, datatype=term.datatype)
-        return term
-
-    for s_, p_, o_ in graph:
-        out.add((s_, p_, norm(o_)))
-    return out
+def _canonical_turtle(text: str) -> str:
+    return _canonical_dataset(ox.Dataset(ox.parse(text, format=ox.RdfFormat.TURTLE)))
 
 
 def _relabelled(graph: Graph) -> Graph:
@@ -192,12 +180,13 @@ def _reordered(graph: Graph, seed: int) -> Graph:
 @pytest.mark.parametrize("seed", SEEDS)
 def test_p1_canonical_output_is_lossless(seed: int) -> None:
     graph = _random_graph(seed)
+    serialized = deterministic_turtle(graph)
     reparsed = Graph()
-    reparsed.parse(data=deterministic_turtle(graph), format="turtle")
+    reparsed.parse(data=serialized, format="turtle")
     assert len(reparsed) == len(graph), (
         f"seed {seed}: triple count changed, {len(graph)} in, {len(reparsed)} out"
     )
-    assert isomorphic(_rdf11_literals(reparsed), _rdf11_literals(graph)), (
+    assert _canonical_turtle(serialized) == _canonical_graph(graph), (
         f"seed {seed}: canonical output is not isomorphic to its input "
         f"({len(graph)} triples in, {len(reparsed)} out)"
     )
