@@ -151,6 +151,13 @@ def _canonical_quads(g: Graph) -> list:
     return list(ds)
 
 
+def _canonical_dataset_quads(nquads: bytes) -> list:
+    """Canonical quads from an N-Quads document, for named-graph cases."""
+    dataset = ox.Dataset(ox.parse(nquads, format=ox.RdfFormat.N_QUADS))
+    dataset.canonicalize(ox.CanonicalizationAlgorithm.RDFC_1_0)
+    return list(dataset)
+
+
 def _shapes_graph(n: int, extra: bool = False) -> Graph:
     g = Graph()
     g.bind("ex", EX)
@@ -241,6 +248,67 @@ def test_wl_relabel_quads_remaps_blank_node_graph_names():
 
     assert as_object and as_graph_name
     assert as_object == as_graph_name
+
+
+def test_wl_labels_graph_name_only_blank_nodes_by_content() -> None:
+    """A blank node used only as a graph name must get a real signature.
+
+    Such a node has no adjacency as a term, so before graph membership was
+    considered its signature was the empty string -- every graph-name node in
+    a dataset hashed identically and was separated only by the collision
+    counter, which is assigned in ``c14nN`` order. That is precisely the
+    RDFC-1.0 numbering instability WL labelling exists to remove.
+    """
+    quads = _canonical_dataset_quads(
+        b"<http://example.org/s1> <http://example.org/p> <http://example.org/o1> _:g1 .\n"
+        b"<http://example.org/s2> <http://example.org/p> <http://example.org/o2> _:g2 .\n"
+    )
+    labels = wl_blank_node_labels(quads)
+    signatures = {label.split("_")[0] for label in labels.values()}
+
+    assert len(labels) == 2
+    assert len(signatures) == 2, "graph-name nodes still share a signature"
+    assert all("_" not in label for label in labels.values()), (
+        "no collision counter should be needed once the nodes are distinguishable"
+    )
+
+
+def test_wl_distinguishes_identical_structure_in_different_named_graphs() -> None:
+    """The same shape in two named graphs must not collide.
+
+    Ignoring ``graph_name`` merged both graphs into one adjacency index, so
+    two blank nodes with identical local structure tied and fell back to the
+    collision counter.
+    """
+    quads = _canonical_dataset_quads(
+        b'<http://example.org/s> <http://example.org/p> _:a <http://example.org/gA> .\n'
+        b'_:a <http://example.org/q> "v" <http://example.org/gA> .\n'
+        b'<http://example.org/s> <http://example.org/p> _:b <http://example.org/gB> .\n'
+        b'_:b <http://example.org/q> "v" <http://example.org/gB> .\n'
+    )
+    labels = wl_blank_node_labels(quads)
+    signatures = {label.split("_")[0] for label in labels.values()}
+
+    assert len(labels) == 2
+    assert len(signatures) == 2, "the two named graphs are still indistinguishable"
+
+
+def test_wl_labels_are_unchanged_for_default_graph_input() -> None:
+    """Adding graph awareness must not relabel default-graph datasets.
+
+    Every artifact this library has ever produced came from a default-graph
+    input. A signature change there would rewrite all of them on the next
+    run, which is the churn the library exists to prevent -- so the graph
+    term is omitted entirely for the default graph, and these labels are
+    pinned to the values produced before graph membership was considered.
+    """
+    labels = wl_blank_node_labels(_canonical_quads(_shapes_graph(3)))
+
+    assert sorted(labels) == ["c14n0", "c14n1", "c14n2"]
+    assert len(set(labels.values())) == 3
+    assert all("_" not in label for label in labels.values())
+    # Pinned bytes: recompute only if you intend to reformat every artifact.
+    assert sorted(labels.values()) == ["b937674156d28", "be01e628a365e", "be8612b4db649"]
 
 
 @pytest.mark.parametrize("output_format", ["turtle", "json-ld", "xml", "nt", "nquads", "trig", "n3"])

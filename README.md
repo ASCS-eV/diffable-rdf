@@ -99,6 +99,11 @@ structure, an edit *inside* one large connected structure can relabel all of
 it. Diff stability comes from isolating unrelated regions of the graph from
 each other, not from isolating parts of a single interconnected one.
 
+For quad datasets, a blank node's label also depends on which graph its
+statements are in, so the same structure in two named graphs is labelled
+distinctly and relocating a statement relabels the nodes it touches. Datasets
+with only a default graph are labelled exactly as before.
+
 ### Composing with an existing pipeline
 
 If a tool already runs RDFC-1.0 itself, it does not need `deterministic_turtle`
