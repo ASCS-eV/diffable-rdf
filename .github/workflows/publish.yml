@@ -19,7 +19,8 @@ jobs:
 
       - name: Run tests
         run: |
-          uv sync --group dev
+          # --locked checks the committed metadata before the --frozen run.
+          uv sync --locked --group dev
           uv run --frozen pytest -q
 
       - name: Build sdist + wheel
