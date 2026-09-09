@@ -46,6 +46,7 @@ import io
 import json
 import logging
 import re
+from xml.etree import ElementTree
 
 import pyoxigraph as ox
 import rdflib
@@ -192,6 +193,74 @@ def _finalize_rdf_xml(serialized: str) -> str:
     """
     _assert_xml_10_text_representable(serialized)
     return serialized.replace("\r", "&#xD;")
+
+
+def _sort_rdf_xml_elements(parent: ElementTree.Element, indent: str, closing: str) -> None:
+    """Order ``parent``'s children and re-indent them, in place.
+
+    Whitespace is reset rather than carried: an element's trailing text travels
+    with it, so reordering alone would move the indentation around and leave
+    the output varying by whitespace instead of by element order.
+    """
+    def key(element: ElementTree.Element) -> tuple[str, str, str]:
+        identity = ""
+        for attribute, value in sorted(element.attrib.items()):
+            if attribute.endswith("}about") or attribute.endswith("}nodeID"):
+                identity = value
+                break
+        # The serialized element breaks ties, so the order is total even for
+        # elements with no identifying attribute -- property elements, whose
+        # identity is their predicate and value.
+        return identity, element.tag, ElementTree.tostring(element, encoding="unicode")
+
+    children = sorted(parent, key=key)
+    if not children:
+        return
+    for child in list(parent):
+        parent.remove(child)
+    parent.extend(children)
+    parent.text = indent
+    for child in children[:-1]:
+        child.tail = indent
+    children[-1].tail = closing
+
+
+def _sort_rdf_xml_descriptions(serialized: str) -> str:
+    """Order the elements of RDF/XML deterministically.
+
+    rdflib's RDF/XML serializer, which the degraded path uses, emits both its
+    ``rdf:Description`` elements and the property elements inside them in an
+    order that follows its own graph traversal, and so varies between
+    processes: measured at 6 distinct documents over 6 hash seeds for one
+    graph, differing in element order alone. RDF/XML attaches no meaning to
+    either order -- each property element is one triple -- so sorting them is
+    lossless and makes the output reproducible.
+
+    This is the same compensation the line-oriented branch already applies by
+    sorting N-Triples lines, against the same serializer's instability.
+
+    Parsed with ElementTree rather than rewritten as text, because element
+    order is a structural property and a regex over serialized RDF reaches into
+    content it should not.
+
+    rdflib's *plain* XML serializer emits neither ``rdf:parseType="Collection"``
+    nor ``parseType="Literal"`` -- only its pretty-printing serializer does, and
+    that is never used here -- so nothing in this output has a meaningful
+    order. The guard below keeps that assumption honest rather than implicit:
+    if a ``parseType`` ever appears, the document is returned untouched.
+    """
+    root = ElementTree.fromstring(serialized)
+    if any(name.endswith("}parseType") for element in root.iter() for name in element.attrib):
+        return serialized
+
+    _sort_rdf_xml_elements(root, "\n  ", "\n")
+    for description in root:
+        _sort_rdf_xml_elements(description, "\n    ", "\n  ")
+
+    # Keep the declaration rdflib wrote; ElementTree does not reproduce it.
+    declaration, newline, _ = serialized.partition("\n")
+    body = ElementTree.tostring(root, encoding="unicode")
+    return f"{declaration}{newline}{body}" if declaration.startswith("<?xml") else body
 
 
 def _first_term_n_triples_cannot_write(
@@ -615,7 +684,9 @@ def canonicalize_rdf_graph(
         )
         result = _deterministic_fallback_serialize(graph, output_format)
         if ox_format == ox.RdfFormat.RDF_XML:
-            result = _finalize_rdf_xml(result)
+            # Sort before protecting the CRs: the sort re-serializes the tree,
+            # which would undo a character reference written earlier.
+            result = _finalize_rdf_xml(_sort_rdf_xml_descriptions(result))
         return _with_single_trailing_newline(result)
 
     dataset = ox.Dataset()

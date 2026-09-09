@@ -48,6 +48,11 @@ affected artifact, commit it once, and subsequent runs are stable again.
 - **N-Quads and TriG work on the degraded path**, emitting N-Triples and
   collection-free Turtle respectively — each a valid document in its own format
   for a single graph, and neither inventing a graph name the input did not have.
+- **Degraded RDF/XML element order is now deterministic.** rdflib's RDF/XML
+  serializer orders both its `rdf:Description` elements and the property
+  elements inside them by its own graph traversal, so the same graph produced
+  different bytes in different processes. Both are sorted now, as the
+  line-oriented formats already sort their lines.
 - **`nt` and `nquads` now raise for a graph they cannot represent** instead of
   returning text no parser will read. Both accept only absolute IRIs, and a
   graph takes the fallback precisely because it holds a term that is not one.
