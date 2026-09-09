@@ -44,6 +44,7 @@ import rdflib
 from rdflib import Graph
 from rdflib.compare import to_canonical_graph
 
+from .graph_input import _require_single_graph
 from .jsonld import deterministic_json
 from .namespaces import prepare_namespaces
 
@@ -388,10 +389,15 @@ def canonicalize_rdf_graph(
     Falls back to plain rdflib serialization for unsupported formats or
     graphs containing non-standard RDF (e.g. literal predicates).
 
-    :param graph: The rdflib Graph to serialize.
+    :param graph: A single rdflib Graph to serialize. Dataset and
+        ConjunctiveGraph containers are not supported; select an individual
+        graph context.
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
     :return: Deterministic string serialization of the graph.
+    :raises TypeError: If ``graph`` is a Dataset or ConjunctiveGraph container.
     """
+    _require_single_graph(graph)
+
     ox_format = _FORMAT_MAP.get(output_format.lower())
     if ox_format is None:
         logger.warning(

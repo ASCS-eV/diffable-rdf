@@ -99,6 +99,13 @@ deterministic_json(obj)                    # sorted keys and unordered JSON(-LD)
 well_known_prefix_map()                    # namespace IRI -> standard prefix name
 ```
 
+The graph serializers accept one `rdflib.Graph`. They reject `Dataset` and
+`ConjunctiveGraph` containers because triple serialization cannot preserve
+graph names. Select a context explicitly, for example
+`deterministic_turtle(dataset.graph(graph_iri))`. To process a whole dataset
+while retaining graph names, use the quad-aware `wl_relabel_quads` primitive
+before your dataset serializer.
+
 ## API
 
 | Function | Purpose |
