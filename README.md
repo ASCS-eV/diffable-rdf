@@ -95,7 +95,7 @@ Other entry points:
 from diffable_rdf import canonicalize_rdf_graph, deterministic_json, well_known_prefix_map
 
 canonicalize_rdf_graph(graph, "turtle")   # lower-level RDFC-1.0 canonical form
-deterministic_json(obj)                    # recursively key/list-sorted JSON(-LD)
+deterministic_json(obj)                    # sorted keys and unordered JSON(-LD) arrays
 well_known_prefix_map()                    # namespace IRI -> standard prefix name
 ```
 
@@ -105,10 +105,20 @@ well_known_prefix_map()                    # namespace IRI -> standard prefix na
 |---|---|
 | `deterministic_turtle(graph) -> str` | Diff-stable, idiomatic Turtle (RDFC-1.0 + WL hashing + rdflib re-serialize). |
 | `canonicalize_rdf_graph(graph, output_format="turtle") -> str` | RDFC-1.0 canonical serialization (with rdflib fallback for non-standard RDF). |
-| `deterministic_json(obj, indent=3, preserve_list_order_keys=None) -> str` | Recursively sorted JSON; preserves JSON-LD ordered keys (`@context`, `@list`, …). |
+| `deterministic_json(obj, indent=3, preserve_list_order_keys=None) -> str` | Recursively sorted JSON; preserves ordered JSON-LD values and configured list keys. |
 | `well_known_prefix_map() -> dict[str, str]` | rdflib's curated namespace→prefix bindings. |
 | `wl_blank_node_labels(quads, iterations=None) -> dict[str, str]` | Diff-stable label for each blank node, from canonical pyoxigraph quads. |
 | `wl_relabel_quads(quads, iterations=None) -> list` | The same labels, already applied to the quads. |
+
+`deterministic_json` sorts object keys and unordered arrays, but retains array
+order in JSON-LD `@list` values and `@json` literal payloads. It recognizes
+keyword aliases, `@container: @list`, and `@type: @json` declarations from
+local contexts, including ordered context overrides, inheritance, and null
+resets. It never loads remote contexts or imports. For remote, scoped, or
+unsupported context features, it conservatively keeps arrays whose semantics
+cannot be determined locally. That safeguard covers the affected value and
+all its descendants, including possible JSON literal data containing
+`@context: null`; this is not a full JSON-LD context processor.
 
 `iterations=None` (the default) refines each connected blank-node component
 independently until its partition stops changing — the Weisfeiler-Lehman
@@ -197,7 +207,11 @@ RDF graph are deliberately mapped onto the same output:
   such as `U+0001`, raise a clear `ValueError` instead of emitting invalid or
   lossy RDF/XML.
 - **Prefix declarations are filtered** to the namespaces the graph
-  actually uses, so unused bindings do not appear in the output.
+  actually uses, so unused bindings do not appear in the output. Caller
+  prefix names take precedence, and otherwise-generated `ns1`, `ns2`, ...
+  names are allocated in stable IRI order, independent of graph insertion
+  order and process hash seed. Literal datatype namespaces participate in
+  the same allocation.
 - **`graph.base` is not carried into the output.** rdflib relativizes
   against a base by naive string prefixing, which is not RFC-3986-correct
   for hash bases: `http://ex.org/d#a` under base `http://ex.org/d#` would
