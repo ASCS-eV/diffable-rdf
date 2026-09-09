@@ -40,9 +40,11 @@ import re
 
 import pyoxigraph as ox
 import rdflib
+from rdflib import Graph
 from rdflib.compare import to_canonical_graph
 
 from .jsonld import deterministic_json
+from .namespaces import prepare_namespaces
 
 logger = logging.getLogger(__name__)
 
@@ -130,13 +132,15 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
     :return: Deterministic string serialization of the graph.
     """
-    canonical = to_canonical_graph(graph)
-    # to_canonical_graph builds a fresh graph without the source's namespace
-    # bindings; rebind them so the output does not fall back to rdflib's
-    # non-deterministic auto-generated ``ns1:``/``ns2:`` prefixes.
-    for prefix, namespace in graph.namespace_manager.namespaces():
-        canonical.namespace_manager.bind(prefix, namespace, replace=True)
     if output_format.lower() in _COLLECTION_CAPABLE_FORMATS:
+        canonicalized = to_canonical_graph(graph)
+        # to_canonical_graph creates a Graph() with rdflib's built-in
+        # namespaces. Copy its canonical triples into a namespace-empty graph
+        # so only caller bindings and deterministic generated names can win.
+        canonical = Graph(bind_namespaces="none")
+        for triple in canonicalized:
+            canonical.add(triple)
+        prepare_namespaces(canonical, graph)
         # Imported here, not at module level: diffable_rdf.turtle imports this
         # module from inside deterministic_turtle, so importing it back at
         # module level here would create an import cycle. Deferring the
@@ -148,6 +152,11 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         _NoCollectionTurtleSerializer(canonical).serialize(buffer, encoding="utf-8")
         serialized = buffer.getvalue().decode("utf-8")
     else:
+        canonical = to_canonical_graph(graph)
+        # Non-Turtle fallback formats keep rdflib's native namespace behavior;
+        # deterministic QName preallocation is needed by Turtle serializers.
+        for prefix, namespace in graph.namespace_manager.namespaces():
+            canonical.namespace_manager.bind(prefix, namespace, replace=True)
         serialized = canonical.serialize(format=output_format)
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
         lines = [line for line in serialized.splitlines() if line.strip()]
