@@ -27,7 +27,49 @@ from rdflib.plugins.serializers.turtle import TurtleSerializer  # noqa: E402
 from diffable_rdf.wl import wl_blank_node_labels as _wl_signatures  # noqa: E402
 
 
-class _NoCollectionTurtleSerializer(TurtleSerializer):
+class _LiteralPreservingTurtleSerializer(TurtleSerializer):
+    """Turtle serializer that always quotes typed literal lexical forms."""
+
+    def sortProperties(self, properties):  # noqa: N802
+        predicate_order = super().sortProperties(properties)
+
+        # rdflib compares numeric Literals by their Python values. Distinct
+        # terms such as ``01`` and ``1`` therefore tie, leaving their output
+        # order dependent on graph iteration. Break only those ties by the
+        # complete RDF term spelling.
+        from functools import cmp_to_key
+
+        def compare(left, right):
+            if left < right:
+                return -1
+            if right < left:
+                return 1
+            if left == right:
+                return 0
+            left_n3, right_n3 = left.n3(), right.n3()
+            return (left_n3 > right_n3) - (left_n3 < right_n3)
+
+        for objects in properties.values():
+            objects.sort(key=cmp_to_key(compare))
+        return predicate_order
+
+    def label(self, node: "Node", position: int) -> str:
+        from rdflib import Literal
+
+        if isinstance(node, Literal):
+            # Turtle numeric and boolean shorthand asks rdflib to render the
+            # Python value. That can merge distinct RDF terms (``01``/``1``)
+            # and can shorten floating-point lexical forms. Quoted literals
+            # retain the exact lexical form carried by the RDF term.
+            get_pname = getattr(self, "get_pname", self.getQName)
+            return node._literal_n3(
+                use_plain=False,
+                qname_callback=lambda datatype: get_pname(datatype, True),
+            )
+        return super().label(node, position)
+
+
+class _NoCollectionTurtleSerializer(_LiteralPreservingTurtleSerializer):
     """Turtle serializer that never uses ``( … )`` collection syntax.
 
     The fallback for graphs where the inline form cannot represent the collections faithfully.
@@ -46,6 +88,13 @@ class _NoCollectionTurtleSerializer(TurtleSerializer):
         return False
 
 
+def _canonical_dataset_form(dataset, pyoxigraph) -> str:
+    dataset.canonicalize(pyoxigraph.CanonicalizationAlgorithm.RDFC_1_0)
+    return "\n".join(
+        sorted(str(pyoxigraph.Triple(quad.subject, quad.predicate, quad.object)) for quad in dataset)
+    )
+
+
 def _rdfc_canonical_form(graph: "RdfGraph", pyoxigraph) -> str | None:
     """Return the RDFC-1.0 canonical N-Triples of ``graph``, as sorted lines.
 
@@ -60,10 +109,8 @@ def _rdfc_canonical_form(graph: "RdfGraph", pyoxigraph) -> str | None:
     all (non-standard RDF such as literal predicates).  Callers treat that
     as "cannot be compared", never as "equal".
 
-    ``pyoxigraph`` is passed in rather than imported at module level because
-    this package imports it lazily, so that a missing optional dependency
-    surfaces as the actionable ImportError raised by
-    :func:`deterministic_turtle`.
+    ``pyoxigraph`` is passed in because :func:`deterministic_turtle` keeps the
+    required extension's import local to the public operation that uses it.
     """
     try:
         dataset = pyoxigraph.Dataset(
@@ -71,10 +118,13 @@ def _rdfc_canonical_form(graph: "RdfGraph", pyoxigraph) -> str | None:
         )
     except SyntaxError:
         return None
-    dataset.canonicalize(pyoxigraph.CanonicalizationAlgorithm.RDFC_1_0)
-    return "\n".join(
-        sorted(str(pyoxigraph.Triple(quad.subject, quad.predicate, quad.object)) for quad in dataset)
-    )
+    return _canonical_dataset_form(dataset, pyoxigraph)
+
+
+def _rdfc_canonical_text(data: str, rdf_format, pyoxigraph) -> str:
+    """Return the exact RDFC-1.0 form of serialized RDF text."""
+    dataset = pyoxigraph.Dataset(pyoxigraph.parse(data, format=rdf_format))
+    return _canonical_dataset_form(dataset, pyoxigraph)
 
 
 def deterministic_turtle(graph: "RdfGraph") -> str:
@@ -194,7 +244,7 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
                 # diffs on every string literal.
                 if dt_iri == "http://www.w3.org/2001/XMLSchema#string":
                     return Literal(term.value)
-                return Literal(term.value, datatype=URIRef(dt_iri))
+                return Literal(term.value, datatype=URIRef(dt_iri), normalize=False)
             return Literal(term.value)
         raise TypeError(f"Unexpected pyoxigraph term type: {type(term).__name__}: {term}")
 
@@ -240,7 +290,9 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
         serializer_class(result_graph).serialize(buffer, encoding="utf-8")
         return buffer.getvalue().decode("utf-8").rstrip("\n") + "\n"
 
-    expected = _rdfc_canonical_form(result_graph, pyoxigraph)
+    # Compare with the source graph, not the intermediate rdflib graph: that
+    # catches any identity loss during pyoxigraph-to-rdflib term conversion.
+    expected = _rdfc_canonical_form(graph, pyoxigraph)
 
     def _round_trips(text: str) -> bool:
         reparsed = Graph(bind_namespaces="none")
@@ -251,9 +303,11 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
             # crash: fall through to the collection-free rendering, which is
             # what the two-attempt structure below exists for.
             return False
-        if len(reparsed) != len(result_graph):
+        try:
+            actual = _rdfc_canonical_text(text, pyoxigraph.RdfFormat.TURTLE, pyoxigraph)
+        except SyntaxError:
             return False
-        return expected is not None and _rdfc_canonical_form(reparsed, pyoxigraph) == expected
+        return expected is not None and actual == expected
 
     # A canonical form that does not round-trip is worse than none: it silently rewrites the
     # graph. Where inline ``( … )`` collection syntax is safe is rdflib's decision, and it is
@@ -262,7 +316,7 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
     # rdflib's output and check it, rather than predicting it: on the graphs where the inline
     # form detaches or duplicates cells, fall back to explicit rdf:first/rdf:rest statements,
     # which can express any arrangement of cells.
-    text = _render(TurtleSerializer)
+    text = _render(_LiteralPreservingTurtleSerializer)
     if not _round_trips(text):
         text = _render(_NoCollectionTurtleSerializer)
         if not _round_trips(text):
@@ -288,5 +342,3 @@ def well_known_prefix_map() -> dict[str, str]:
     from rdflib import Graph as RdfGraph
 
     return {str(ns): str(pfx) for pfx, ns in RdfGraph().namespaces() if str(pfx)}
-
-

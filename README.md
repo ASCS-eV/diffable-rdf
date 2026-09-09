@@ -21,8 +21,8 @@ with a standards-based pipeline:
 3. **Idiomatic rdflib re-serialization** — inline blank nodes (`[ … ]`),
    collection syntax (`( … )`), and filtered prefixes (only prefixes actually
    used are declared).
-4. **Verified round-trip** — the rendered Turtle is re-parsed and required to be
-   isomorphic to the input before it is returned.
+4. **Verified round-trip** — the rendered Turtle is re-parsed and required to
+   preserve the input's RDF terms before it is returned.
 
 All triples are preserved; only syntactic form changes.
 
@@ -164,9 +164,10 @@ arrangements of shared collections, in `tests/test_canonicalization_properties.p
 | P4 | **Order-independent** — shuffling input triples does not change the output |
 
 Plus checks that no `sh:in`-style list reference dangles, that list cell counts
-survive, and that ten repeated passes produce no byte drift. Comparison is done
-under RDF 1.1 literal identity, so `"a"^^xsd:string` and `"a"` are treated as the
-same term rather than as a spurious difference.
+survive, and that ten repeated passes produce no byte drift. Comparison follows
+RDF 1.1 literal identity: `"a"^^xsd:string` and `"a"` are treated as the same
+term, while distinct typed lexical forms such as `"01"^^xsd:integer` and
+`"1"^^xsd:integer` remain distinct even when they denote the same value.
 
 `tests/test_degraded_paths.py` covers the paths pyoxigraph cannot handle
 (literal predicates, relative IRIs) and the formats it does not support
@@ -187,6 +188,9 @@ RDF graph are deliberately mapped onto the same output:
   such graphs as non-isomorphic, so it cannot be used to check
   losslessness across a language-tag case change.
 - **`"a"^^xsd:string` and `"a"`** are the same term under RDF 1.1.
+- **Other typed literal lexical forms are preserved exactly.** This includes
+  numeric precision and distinct spellings with equal values, such as integer
+  `"01"`/`"1"`, boolean `"1"`/`"true"`, and dateTime `Z`/`+00:00`.
 - **Prefix declarations are filtered** to the namespaces the graph
   actually uses, so unused bindings do not appear in the output.
 - **`graph.base` is not carried into the output.** rdflib relativizes

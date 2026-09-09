@@ -268,7 +268,7 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     :param output_format: The rdflib format name, used for re-parsing.
     :raises ValueError: If the output does not round-trip.
     """
-    from .turtle import _rdfc_canonical_form
+    from .turtle import _rdfc_canonical_form, _rdfc_canonical_text
 
     expected = _rdfc_canonical_form(source, ox)
     if expected is None:
@@ -290,7 +290,19 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
             f"({type(exc).__name__}: {exc}). This is a bug in diffable-rdf: "
             "please report it with the input graph."
         ) from exc
-    if _rdfc_canonical_form(reparsed, ox) != expected:
+    # rdflib parsing above is an interoperability check only. It normalizes
+    # numeric lexical forms, so use pyoxigraph's parsed terms for the exact
+    # identity comparison.
+    ox_format = _FORMAT_MAP[output_format.lower()]
+    try:
+        actual = _rdfc_canonical_text(serialized, ox_format, ox)
+    except SyntaxError as exc:
+        raise ValueError(
+            f"canonical {output_format} serialization does not parse back "
+            f"({type(exc).__name__}: {exc}). This is a bug in diffable-rdf: "
+            "please report it with the input graph."
+        ) from exc
+    if actual != expected:
         raise ValueError(
             f"canonical {output_format} serialization does not round-trip; "
             f"{len(source)} triples in, {len(reparsed)} out. This is a bug in "
