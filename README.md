@@ -78,12 +78,15 @@ Full signatures, error cases and per-format behavior are in the
   the graph keep their labels.
 - **Byte reproducibility assumes the same setup.** The same prefix bindings,
   the same `graph.base`, and the same `rdflib`/`pyoxigraph` versions.
+- **The guarantee covers the formats above.** `canonicalize_rdf_graph` also
+  accepts any name rdflib has a plugin for, as an escape hatch, but warns that
+  delegated output is only as deterministic as that plugin — and some order
+  their output by a graph traversal that varies between processes.
 - **Output is verified before it is returned.** Turtle, TriG, N3 and RDF/XML
   are re-parsed and compared against the input, and a mismatch raises
-  `ValueError` rather than returning a plausible-looking but lossy file. The
-  exception is a graph carrying relative IRIs or generalized RDF terms, which
-  cannot be compared this way and takes a deliberately more explicit fallback
-  instead — see the API guide.
+  `ValueError` rather than returning a lossy file. Graphs with relative IRIs
+  or generalized RDF terms cannot be compared this way and take a more
+  explicit fallback instead — see the API guide.
 
 ## License
 

@@ -134,10 +134,19 @@ renumber the rest. For output kept in version control, prefer
   | N3 | `n3` |
   | JSON-LD | `json-ld`, `jsonld`, `application/ld+json` |
 
-  Any other name is passed to rdflib's serializer plugins, which raise
-  `rdflib.plugin.PluginException` when no plugin is registered for it. That
-  error comes from rdflib, and what such a plugin guarantees about its output
-  is rdflib's business, not this library's.
+  Any other name is delegated to rdflib's serializer plugins, with a logged
+  warning, and **the determinism guarantee does not apply to it**. Several
+  rdflib serializers order their output by a graph traversal that depends on
+  set iteration order, so the same graph can serialize to different bytes in
+  different processes; canonicalizing blank-node labels does not constrain
+  that. Measured over six hash seeds on a graph of shared list cells,
+  `pretty-xml` produced five different documents and `patch` six, while `hext`
+  and `longturtle` were stable. If no plugin is registered for the name,
+  rdflib raises `rdflib.plugin.PluginException`.
+
+  Use a delegated format when you want the output and can live without the
+  guarantee. If you need byte stability, use one of the mapped names above, or
+  relabel quads with `wl_relabel_quads` and drive the plugin yourself.
 
 **Returns.** `str`.
 

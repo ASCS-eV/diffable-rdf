@@ -388,10 +388,23 @@ def canonicalize_rdf_graph(
     Prefix bindings from the rdflib Graph are preserved in the output
     for formats that support them (Turtle, TriG, N3, RDF/XML).
 
-    Falls back to deterministic rdflib-based serialization for unsupported
-    formats or graphs containing terms pyoxigraph cannot parse. Degraded
-    JSON-LD preserves relative subject and object IRIs verbatim, while term
-    positions outside its interoperable standard-RDF subset raise ``ValueError``.
+    The deterministic-output guarantee covers the format names this function
+    maps itself: ``turtle``/``ttl``, ``nt``/``ntriples``/``n-triples``/``nt11``,
+    ``nquads``/``n-quads``, ``xml``/``rdf/xml``, ``trig``, ``n3``, and
+    ``json-ld``/``jsonld``/``application/ld+json``. For those, isomorphic
+    inputs serialize to identical bytes in any process.
+
+    Any other name is delegated to rdflib's serializer plugins with a logged
+    warning, and carries **no** determinism or round-trip guarantee: several
+    rdflib serializers order their output by a graph traversal whose result
+    depends on set iteration order, so the same graph can produce different
+    bytes in different processes. An unregistered name raises
+    ``rdflib.plugin.PluginException`` from rdflib.
+
+    Graphs containing terms pyoxigraph cannot parse take a deterministic
+    rdflib-based fallback. Degraded JSON-LD preserves relative subject and
+    object IRIs verbatim, while term positions outside its interoperable
+    standard-RDF subset raise ``ValueError``.
 
     :param graph: A single rdflib Graph to serialize. Dataset and
         ConjunctiveGraph containers are not supported; select an individual
@@ -405,13 +418,17 @@ def canonicalize_rdf_graph(
     ox_format = _FORMAT_MAP.get(output_format.lower())
     if ox_format is None:
         logger.warning(
-            "pyoxigraph does not support format %r; falling back to rdflib serializer",
+            "%r is not one of the formats this library serializes itself; delegating to "
+            "rdflib's serializer plugins. Deterministic output and round-trip verification "
+            "are not guaranteed for it: some rdflib serializers order their output by graph "
+            "traversal, which varies between processes.",
             output_format,
         )
-        # A plain graph.serialize() here would leak rdflib's run-local
-        # blank-node labels, making the output non-reproducible across
-        # processes for e.g. json-ld -- exactly what this function promises
-        # not to do. Route through the deterministic fallback instead.
+        # The fallback still canonicalizes blank-node labels and sorts
+        # line-oriented and JSON output, so a delegated format is as stable as
+        # this library can make it without reimplementing someone else's
+        # serializer. What it cannot fix is a plugin whose *traversal* order
+        # varies; see the guarantee wording in the docstring above.
         data = _deterministic_fallback_serialize(graph, output_format)
         return data.rstrip("\n") + "\n" if data.endswith("\n") else data
 

@@ -9,7 +9,8 @@ Public API:
         Diff-stable, idiomatic Turtle. The usual entry point.
     canonicalize_rdf_graph(graph, output_format="turtle")
         RDFC-1.0 canonical serialization in Turtle, N-Triples, N-Quads,
-        RDF/XML, TriG, N3 or JSON-LD.
+        RDF/XML, TriG, N3 or JSON-LD. Any other format name is delegated to
+        rdflib with no determinism guarantee.
     deterministic_json(obj, indent=3, preserve_list_order_keys=None)
         Deterministically ordered JSON, keeping arrays whose order carries
         JSON-LD meaning.
