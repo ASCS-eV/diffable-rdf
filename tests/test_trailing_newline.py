@@ -43,7 +43,15 @@ def test_every_mapped_format_ends_with_exactly_one_newline(output_format: str) -
     assert _trailing_newlines(canonicalize_rdf_graph(_graph(), output_format)) == 1
 
 
-@pytest.mark.parametrize("output_format", sorted(_FORMAT_MAP))
+# N-Triples and N-Quads refuse a graph that reaches the degraded path, because
+# they accept only absolute IRIs and such a graph holds a term that is not one.
+_DEGRADED_CARRYING_FORMATS = sorted(
+    name for name in _FORMAT_MAP
+    if name not in {"nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"}
+)
+
+
+@pytest.mark.parametrize("output_format", _DEGRADED_CARRYING_FORMATS)
 def test_the_degraded_path_ends_with_exactly_one_newline(output_format: str) -> None:
     """The fallback uses rdflib's writers, which end Turtle output with two."""
     assert _trailing_newlines(canonicalize_rdf_graph(_degraded_graph(), output_format)) == 1

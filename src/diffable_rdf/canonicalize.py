@@ -52,7 +52,7 @@ import rdflib
 from rdflib import Graph
 from rdflib.compare import to_canonical_graph
 
-from .expanded_jsonld import serialize_expanded_jsonld
+from .expanded_jsonld import _ABSOLUTE_IRI, serialize_expanded_jsonld
 from .graph_input import _require_single_graph
 from .jsonld import deterministic_json
 from .namespaces import prepare_namespaces
@@ -194,6 +194,44 @@ def _finalize_rdf_xml(serialized: str) -> str:
     return serialized.replace("\r", "&#xD;")
 
 
+def _first_term_n_triples_cannot_write(
+    graph: rdflib.Graph,
+) -> tuple[str, rdflib.term.Node] | None:
+    """Return the first term the line-oriented syntaxes cannot express.
+
+    N-Triples and N-Quads accept only absolute IRIs -- "IRIs may be written
+    only as absolute IRIs", N-Triples 1.1 §2.2 -- and only IRIs or blank nodes
+    in the subject position and IRIs in the predicate position. Turtle is
+    laxer: it permits relative IRIs against a base, which is why the
+    Turtle-family formats can carry a graph on this path and these cannot.
+
+    Returns ``(position, term)`` for the first offending term, or ``None`` if
+    the graph is representable.
+    """
+    for subject, predicate, obj in graph:
+        if isinstance(subject, rdflib.URIRef):
+            if not _ABSOLUTE_IRI.match(str(subject)):
+                return "subject", subject
+        elif not isinstance(subject, rdflib.BNode):
+            return "subject", subject
+
+        if not isinstance(predicate, rdflib.URIRef):
+            return "predicate", predicate
+        if not _ABSOLUTE_IRI.match(str(predicate)):
+            return "predicate", predicate
+
+        if isinstance(obj, rdflib.URIRef):
+            if not _ABSOLUTE_IRI.match(str(obj)):
+                return "object", obj
+        elif isinstance(obj, rdflib.Literal):
+            datatype = obj.datatype
+            if datatype is not None and not _ABSOLUTE_IRI.match(str(datatype)):
+                return "literal datatype", datatype
+        elif not isinstance(obj, rdflib.BNode):
+            return "object", obj
+    return None
+
+
 def _with_single_trailing_newline(text: str) -> str:
     """Return ``text`` ending in exactly one newline, or empty if it has none.
 
@@ -242,6 +280,21 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
     :return: Deterministic string serialization of the graph.
     """
+    if output_format.lower() in _LINE_ORIENTED_FORMATS:
+        # rdflib's N-Triples serializer reuses Turtle's term rendering and does
+        # not enforce the absolute-IRI rule, so it will happily write a
+        # relative IRI that its own parser then rejects. Refusing here means a
+        # caller gets an actionable error instead of a file that looks fine and
+        # no parser will read.
+        unwritable = _first_term_n_triples_cannot_write(graph)
+        if unwritable is not None:
+            position, term = unwritable
+            raise ValueError(
+                f"{output_format} cannot represent this graph: the {position} "
+                f"{term!r} is not an absolute IRI, and N-Triples and N-Quads accept "
+                "only absolute IRIs (N-Triples 1.1 section 2.2). Use turtle, trig, "
+                "xml or json-ld, which can carry this graph, or make the term absolute."
+            )
     if output_format.lower() in _JSON_FORMATS:
         # Expanded node objects preserve shared blank nodes and cycles. The
         # rdflib JSON-LD serializer may compact them into recursive @list
