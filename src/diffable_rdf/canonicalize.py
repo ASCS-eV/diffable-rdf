@@ -152,6 +152,13 @@ def _finalize_rdf_xml(serialized: str) -> str:
     A character reference is not normalized by XML parsers. Replacing only
     raw CR characters preserves both CR and CRLF RDF literal values without
     touching serializer-produced markup, ordinary LF, or existing escapes.
+
+    The replacement compensates for pyoxigraph writing a literal CR raw, which
+    is an upstream defect rather than something this format requires;
+    quick-xml fixed it in 0.42.0 and oxigraph's ``main`` already vendors that.
+    When a pyoxigraph release carries it there will be no raw CR left here and
+    this becomes a no-op, so it should be retired --
+    ``tests/test_upstream_tripwires.py`` fails when that happens.
     """
     _assert_xml_10_text_representable(serialized)
     return serialized.replace("\r", "&#xD;")

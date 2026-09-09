@@ -1,4 +1,14 @@
-"""Expanded JSON-LD serialization for canonical rdflib graphs."""
+"""Expanded JSON-LD serialization for canonical rdflib graphs.
+
+This exists because rdflib's own JSON-LD serializer compacts an ``rdf:List``
+into ``@list`` without checking whether anything else references its cells, so
+a shared tail comes back duplicated and non-isomorphic. That is an upstream
+defect, unreported and present in rdflib 7.6.0 (the latest release), which is
+why the degraded path writes expanded node objects itself rather than routing
+through that serializer. It is deliberately not a general JSON-LD processor.
+``tests/test_upstream_tripwires.py`` fails if rdflib fixes the defect, which is
+the signal to reconsider this module.
+"""
 
 from __future__ import annotations
 
