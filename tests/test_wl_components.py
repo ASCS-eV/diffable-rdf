@@ -196,3 +196,61 @@ def test_tied_components_remain_injective() -> None:
     assert len(set(labels.values())) == 2
     assert len({label.split("_")[0] for label in labels.values()}) == 1
     assert sum("_" in label for label in labels.values()) == 1
+
+
+def _two_node_quads() -> list:
+    """A blank-node pair, canonicalized, so refinement has something to do."""
+    dataset = ox.Dataset(
+        ox.parse(
+            '_:a <http://ex/p> _:b .\n_:b <http://ex/q> "x" .\n',
+            format=ox.RdfFormat.N_TRIPLES,
+        )
+    )
+    dataset.canonicalize(ox.CanonicalizationAlgorithm.RDFC_1_0)
+    return list(dataset)
+
+
+@pytest.mark.parametrize("iterations", [-1, -5, -100])
+def test_a_negative_iteration_count_is_rejected(iterations: int) -> None:
+    """``range`` treats a negative count as zero, which hid a caller's mistake.
+
+    The labels such a call returned were plausible and stable across processes,
+    and simply less diff-stable than the caller had asked for, with nothing to
+    signal that no refinement had happened.
+    """
+    quads = _two_node_quads()
+
+    with pytest.raises(ValueError, match="non-negative"):
+        wl_blank_node_labels(quads, iterations=iterations)
+    with pytest.raises(ValueError, match="non-negative"):
+        wl_relabel_quads(quads, iterations=iterations)
+
+
+def test_zero_iterations_is_accepted_and_means_no_refinement() -> None:
+    """``0`` is a coherent request, documented, and must keep working.
+
+    Its labels come from each node's named-node edges alone, so they differ
+    from the fixpoint labelling -- which is what makes the distinction
+    observable, and worth pinning so the documented behavior cannot drift.
+    """
+    quads = _two_node_quads()
+
+    unrefined = wl_blank_node_labels(quads, iterations=0)
+    fixpoint = wl_blank_node_labels(quads)
+
+    assert set(unrefined) == set(fixpoint)
+    assert unrefined != fixpoint
+    assert len(set(unrefined.values())) == len(unrefined), "labels stay injective"
+    # And it is reproducible, which is why it is not simply an error.
+    assert wl_blank_node_labels(quads, iterations=0) == unrefined
+
+
+def test_the_error_names_the_argument_and_the_alternatives() -> None:
+    """An actionable message: what was wrong, and what to pass instead."""
+    with pytest.raises(ValueError) as raised:
+        wl_blank_node_labels(_two_node_quads(), iterations=-3)
+
+    message = str(raised.value)
+    assert "iterations" in message
+    assert "-3" in message
+    assert "None" in message and "0" in message
