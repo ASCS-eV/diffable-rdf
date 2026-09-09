@@ -78,42 +78,89 @@ def wl_blank_node_labels(
     — and structurally indistinguishable nodes, which legitimately share
     a signature — are disambiguated by appending a counter, so the
     mapping is always injective.
+
+    A quad's graph is part of its contribution to a signature, so the same
+    structure in two different named graphs receives different labels and
+    moving a triple between graphs relabels the nodes involved.  The graph
+    term is omitted for the default graph, which keeps labels identical to
+    those produced before graph membership was considered -- datasets with
+    no named graphs are unaffected.  A blank node used *as* a graph name is
+    labelled from the quads it names, so it is no longer indistinguishable
+    from every other graph-name node.
+
+    One case remains unresolved by design: two graphs *named by blank
+    nodes* whose contents are structurally identical still yield tied
+    signatures for the nodes inside them, because a blank-node graph name
+    collapses to a constant rather than to its own signature (a blank
+    node's identifier must never enter a signature).  Such ties are broken
+    by the collision counter in ``c14nN`` order, exactly as for genuinely
+    indistinguishable nodes.
     """
     # Collect all blank node IDs and build adjacency index.
     bnode_ids: set[str] = set()
-    # outgoing[b] = list of (predicate_str, object_str_or_bnode_id, is_bnode)
-    outgoing: dict[str, list[tuple[str, str, bool]]] = {}
-    # incoming[b] = list of (subject_str_or_bnode_id, predicate_str, is_bnode)
-    incoming: dict[str, list[tuple[str, str, bool]]] = {}
+    # outgoing[b] = list of (predicate_str, object_str_or_bnode_id, graph_tag, is_bnode)
+    outgoing: dict[str, list[tuple[str, str, str, bool]]] = {}
+    # incoming[b] = list of (subject_str_or_bnode_id, predicate_str, graph_tag, is_bnode)
+    incoming: dict[str, list[tuple[str, str, str, bool]]] = {}
+    # naming[b] = signature fragments for the quads that blank node b names
+    naming: dict[str, list[str]] = {}
+
+    def graph_tag(graph_name) -> str:
+        """A stable, blank-node-free key for the graph a quad lives in.
+
+        The empty string for the default graph, so that a dataset with no
+        named graphs produces byte-identical signatures to the version of
+        this function that ignored ``graph_name`` entirely -- otherwise
+        every already-committed artifact would be relabelled.  A blank-node
+        graph name collapses to a constant, because a blank node's own
+        identifier must never enter a signature.
+        """
+        if isinstance(graph_name, pyoxigraph.DefaultGraph):
+            return ""
+        if isinstance(graph_name, pyoxigraph.BlankNode):
+            return "_:"
+        return str(graph_name)
 
     for q in quads:
         s, p, o = q.subject, q.predicate, q.object
         s_is_bn = isinstance(s, pyoxigraph.BlankNode)
         o_is_bn = isinstance(o, pyoxigraph.BlankNode)
         p_str = str(p)
+        tag = graph_tag(q.graph_name)
 
         # A blank node used as a graph name must be relabelled consistently
-        # with its uses as a term, otherwise one node is split into two.
+        # with its uses as a term, otherwise one node is split into two.  It
+        # also needs a signature of its own: derived from the quads it names,
+        # since it may appear nowhere else and would otherwise hash to the
+        # empty string along with every other graph-name node.
         if isinstance(q.graph_name, pyoxigraph.BlankNode):
             bnode_ids.add(q.graph_name.value)
+            naming.setdefault(q.graph_name.value, []).append(
+                f"~{'_:' if s_is_bn else str(s)}={p_str}={'_:' if o_is_bn else str(o)}"
+            )
 
         if s_is_bn:
             bnode_ids.add(s.value)
-            outgoing.setdefault(s.value, []).append((p_str, o.value if o_is_bn else str(o), o_is_bn))
+            outgoing.setdefault(s.value, []).append((p_str, o.value if o_is_bn else str(o), tag, o_is_bn))
         if o_is_bn:
             bnode_ids.add(o.value)
-            incoming.setdefault(o.value, []).append((s.value if s_is_bn else str(s), p_str, s_is_bn))
+            incoming.setdefault(o.value, []).append((s.value if s_is_bn else str(s), p_str, tag, s_is_bn))
+
+    def edge(direction: str, label: str, value: str, tag: str) -> str:
+        """One signature fragment, carrying the graph tag only when there is one."""
+        return f"{direction}{label}@{tag}={value}" if tag else f"{direction}{label}={value}"
 
     # Initialise signatures: named-node edges only (no bnode IDs).
     sig: dict[str, str] = {}
     for bid in bnode_ids:
         parts = []
-        for p_str, o_str, o_is_bn in outgoing.get(bid, []):
+        for p_str, o_str, tag, o_is_bn in outgoing.get(bid, []):
             if not o_is_bn:
-                parts.append(f"+{p_str}={o_str}")
-        for s_str, p_str, s_is_bn in incoming.get(bid, []):
+                parts.append(edge("+", p_str, o_str, tag))
+        for s_str, p_str, tag, s_is_bn in incoming.get(bid, []):
             if not s_is_bn:
-                parts.append(f"-{s_str}={p_str}")
+                parts.append(edge("-", s_str, p_str, tag))
+        parts.extend(naming.get(bid, []))
         sig[bid] = "|".join(sorted(parts))
 
     # Iterative refinement: incorporate neighbour signatures.
@@ -137,12 +184,12 @@ def wl_blank_node_labels(
         new_sig: dict[str, str] = {}
         for bid in bnode_ids:
             parts = [sig[bid]]
-            for p_str, o_str, o_is_bn in outgoing.get(bid, []):
+            for p_str, o_str, tag, o_is_bn in outgoing.get(bid, []):
                 if o_is_bn:
-                    parts.append(f"+{p_str}={sig.get(o_str, '')}")
-            for s_str, p_str, s_is_bn in incoming.get(bid, []):
+                    parts.append(edge("+", p_str, sig.get(o_str, ""), tag))
+            for s_str, p_str, tag, s_is_bn in incoming.get(bid, []):
                 if s_is_bn:
-                    parts.append(f"-{sig.get(s_str, '')}={p_str}")
+                    parts.append(edge("-", sig.get(s_str, ""), p_str, tag))
             new_sig[bid] = hashlib.sha256("|".join(sorted(parts)).encode("utf-8")).hexdigest()
         sig = new_sig
         if iterations is None:
