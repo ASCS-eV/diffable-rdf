@@ -54,7 +54,7 @@ pip install diffable-rdf
 uv add diffable-rdf
 ```
 
-Requires Python 3.10+, `rdflib>=6`, and `pyoxigraph>=0.4`.
+Requires Python 3.10+, `rdflib>=6.3.2`, and `pyoxigraph>=0.5.4`.
 
 ## Usage
 
