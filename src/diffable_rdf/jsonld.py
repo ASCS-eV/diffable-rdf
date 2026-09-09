@@ -5,15 +5,25 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-# JSON-LD keys whose array values carry ordering semantics and must NOT be
-# sorted.  An ``@context`` array is processed in order, each entry overriding
-# the last -- the JSON-LD 1.1 API's Context Processing Algorithm (§4.1) wraps a
-# non-array local context in an array at step 4 and iterates it at step 5:
-# https://www.w3.org/TR/json-ld11-api/#context-processing-algorithm
-# ``@list`` is the ordered container (JSON-LD 1.1 §4.3.1).  ``@graph``/``@set``
-# and ``imports`` are protected defensively, since reordering them is never
-# needed for a diff and can change what a consumer reads.
-_JSONLD_ORDERED_KEYS: frozenset[str] = frozenset({"@context", "@list", "@graph", "@set", "imports"})
+# The JSON-LD keywords whose array values genuinely carry order, and so must
+# never be sorted.  An ``@context`` array is processed in order, each entry
+# overriding the last -- the JSON-LD 1.1 API's Context Processing Algorithm
+# (§4.1) wraps a non-array local context in an array at step 4 and iterates it
+# at step 5: https://www.w3.org/TR/json-ld11-api/#context-processing-algorithm
+# ``@list`` is *the* ordered container (JSON-LD 1.1 §4.3.1).
+#
+# ``@graph`` and ``@set`` are deliberately absent. JSON-LD arrays are unordered
+# unless a container says otherwise, and ``@set`` exists precisely to express
+# "an unordered set of data" (§1.7; §4.3.2), so protecting them bought nothing
+# and cost the determinism this function is for: a document whose node objects
+# sit under ``@graph`` came out in whatever order the caller happened to build.
+_ORDERED_JSONLD_KEYWORDS: frozenset[str] = frozenset({"@context", "@list"})
+
+# What ``preserve_list_order_keys`` defaults to. This is a superset of the
+# keywords above by one entry: ``imports`` is not a JSON-LD keyword at all, but
+# an ordered list in vocabularies that use it, so it stays a local convenience
+# a caller can drop by passing their own set.
+_JSONLD_ORDERED_KEYS: frozenset[str] = frozenset({"@context", "@list", "imports"})
 _JSONLD_KEYWORDS: frozenset[str] = frozenset(
     {
         "@context",
@@ -196,9 +206,11 @@ def deterministic_json(
     :param obj: A JSON-serializable object.
     :param indent: Number of spaces of indentation, passed to ``json.dumps``.
     :param preserve_list_order_keys: Dict keys whose immediate list value
-        keeps its order. Defaults to ``@context``, ``@list``, ``@graph``,
-        ``@set`` and ``imports``; a set passed here replaces that default,
-        while the JSON-LD keyword protections above still apply.
+        keeps its order. Defaults to ``@context``, ``@list`` and ``imports``;
+        a set passed here replaces that default, while the JSON-LD keyword
+        protections above still apply. ``@graph`` and ``@set`` are not
+        protected: JSON-LD leaves both unordered, so their arrays are sorted
+        like any other.
     :returns: Deterministic JSON string.
     :raises TypeError: From ``json.dumps``, for a value it cannot encode.
     """
@@ -246,7 +258,7 @@ def deterministic_json(
                         isinstance(k, str)
                         and (
                             k in skip
-                            or _resolve_keyword(k, local_context) in _JSONLD_ORDERED_KEYS
+                            or _resolve_keyword(k, local_context) in _ORDERED_JSONLD_KEYWORDS
                             or k in local_context.json_terms
                             or k in local_context.list_terms
                         )
