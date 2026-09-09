@@ -8,11 +8,16 @@ See ``docs/api.md`` for the full contract.
 
 **Known limitations:**
 
-1. **xsd:string normalization**: pyoxigraph follows RDF 1.1, where plain
-   string literals and ``"text"^^xsd:string`` are identical.  The output
-   will never contain explicit ``^^xsd:string`` annotations.  Code that
-   re-parses the output with rdflib will see ``Literal("x")`` (datatype
-   ``None``) rather than ``Literal("x", datatype=XSD.string)``.
+1. **xsd:string normalization**: pyoxigraph follows RDF 1.1, where a literal
+   with no datatype IRI and no language tag *has* datatype ``xsd:string``
+   (Turtle §2.5.1), so plain string literals and ``"text"^^xsd:string`` are
+   one term.  The output will never contain explicit ``^^xsd:string``
+   annotations.  Code that re-parses the output with rdflib will see
+   ``Literal("x")`` (datatype ``None``) rather than
+   ``Literal("x", datatype=XSD.string)``.  This is an equivalence, not a
+   normalization: RDF 1.1 Concepts §3.3 compares lexical forms character by
+   character, so every *other* typed lexical form is preserved exactly.
+   https://www.w3.org/TR/rdf11-concepts/#section-Graph-Literal
 
 2. **Non-standard RDF**: Graphs with relative IRIs or generalized RDF terms
    are rejected by pyoxigraph. This function uses a deterministic rdflib

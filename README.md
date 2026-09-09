@@ -70,9 +70,10 @@ Full signatures, error cases and per-format behavior are in the
   serialization cannot carry graph names. Select a context explicitly
   (`deterministic_turtle(dataset.graph(graph_iri))`), or relabel quads with
   `wl_relabel_quads` and serialize the dataset yourself.
-- **Canonical, not byte-preserving.** Language tags are lowercased and
-  `"a"^^xsd:string` is written as `"a"`, both being the same RDF 1.1 term.
-  Other typed lexical forms, including `"01"^^xsd:integer`, are kept exactly.
+- **Canonical, not byte-preserving.** `"a"^^xsd:string` is written `"a"` (the
+  same RDF 1.1 term) and language tags are lowercased (permitted: their value
+  space is lower case). Every other typed lexical form is kept exactly,
+  including `"01"^^xsd:integer`.
 - **Diff stability is per connected blank-node region.** An edit inside one
   large interconnected structure can relabel all of it; unrelated regions of
   the graph keep their labels.
