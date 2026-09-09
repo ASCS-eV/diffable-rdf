@@ -24,8 +24,14 @@ jobs:
       - name: Sync (with dev group)
         run: uv sync --group dev
 
+      - name: Lint
+        run: uv run --frozen ruff check src tests
+
+      - name: Type check
+        run: uv run --frozen mypy src/diffable_rdf
+
       - name: Run tests
-        run: uv run --frozen pytest -q
+        run: uv run --frozen pytest -q --cov=diffable_rdf --cov-report=term-missing
 
       - name: Build sdist + wheel
         run: uv build
