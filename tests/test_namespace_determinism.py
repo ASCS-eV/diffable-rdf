@@ -12,6 +12,7 @@ import textwrap
 import pytest
 import rdflib
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
+from rdflib.compare import isomorphic
 from rdflib.namespace import XSD
 
 from diffable_rdf import canonicalize_rdf_graph, deterministic_turtle
@@ -183,3 +184,48 @@ def test_deterministic_turtle_degraded_path_keeps_graph_and_bindings() -> None:
 
     assert "relative/" in result
     assert tuple(graph.namespaces()) == before
+
+
+@pytest.mark.parametrize(
+    "namespace",
+    [
+        "http://query.example/vocab?v=",
+        "http://query.example/a?b=c&d=",
+        "http://query.example/?",
+    ],
+)
+def test_a_query_string_namespace_is_declared_as_a_prefix(namespace: str) -> None:
+    """A namespace with a query string is usable, so its binding must survive.
+
+    The prefix filter used to drop these, attributing it to rdflib being unable
+    to round-trip such CURIEs. That does not reproduce on any supported
+    version, so the binding was being discarded for no reason -- costing
+    verbosity, since every IRI under it was then written out in full.
+    """
+    graph = Graph(bind_namespaces="none")
+    graph.bind("q", URIRef(namespace))
+    graph.add((URIRef(namespace + "s"), URIRef(namespace + "p"), Literal("v")))
+
+    result = canonicalize_rdf_graph(graph, output_format="turtle")
+
+    assert f"@prefix q: <{namespace}>" in result, result
+    assert "q:s q:p" in result, result
+    # And it has to survive the round trip that the guard already enforces.
+    assert isomorphic(Graph().parse(data=result, format="turtle"), graph)
+
+
+def test_a_namespace_with_an_embedded_fragment_is_still_skipped() -> None:
+    """The half of the filter that a real pyoxigraph rejection does back.
+
+    Tested at the predicate level rather than end to end: a term *under* such a
+    namespace carries two ``#`` and is not a valid IRI at all, so a graph using
+    one never reaches prefix collection -- it fails pyoxigraph's parse and
+    takes the degraded path. What the filter prevents is handing pyoxigraph a
+    prefix IRI it rejects outright.
+    """
+    from diffable_rdf.canonicalize import _is_safe_prefix_iri
+
+    assert _is_safe_prefix_iri("http://ex/a#b#") is False
+    assert _is_safe_prefix_iri("http://ex/vocab#") is True
+    assert _is_safe_prefix_iri("http://ex/vocab/") is True
+    assert _is_safe_prefix_iri("http://ex/a?b=c&d=") is True

@@ -346,22 +346,23 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
 def _is_safe_prefix_iri(iri: str) -> bool:
     """Check whether a namespace IRI is safe for prefix serialization.
 
-    pyoxigraph rejects a prefix IRI with an invalid code point, such as one
-    carrying a second ``#``, and raising from a namespace binding the caller
-    cannot see would be a poor trade for a prefix declaration.  IRIs that do
-    not have the shape of a namespace are therefore skipped during prefix
-    collection: a skipped prefix only means its IRIs are written in full.
+    Only one shape is actually unsafe: an IRI carrying a second ``#``, which
+    pyoxigraph rejects as an invalid prefix IRI ("Invalid prefix … IRI",
+    verified on 0.5.4 and 0.5.11).  Raising over a namespace binding the caller
+    may not even know about would be a poor trade for a prefix declaration, so
+    such a binding is skipped during prefix collection instead; a skipped
+    prefix only means its IRIs are written in full.
+
+    Query strings are *not* unsafe, despite an earlier claim that rdflib could
+    not round-trip such CURIEs.  That does not reproduce on any supported
+    version: ``@prefix n: <http://ex/?q=>`` with ``n:x``, and the harder
+    ``<http://ex/a?b=c&d=>``, both round-trip exactly on rdflib 6.3.2 and
+    7.6.0 with pyoxigraph 0.5.4 and 0.5.11.
     """
     # A namespace IRI should end with '/' or '#'.  If '#' appears
     # *before* the final character, the IRI contains an embedded
     # fragment which produces unusable CURIEs.
-    if "#" in iri[:-1]:
-        return False
-    # Query parameters in namespace IRIs produce CURIEs that rdflib
-    # cannot parse back.
-    if "?" in iri:
-        return False
-    return True
+    return "#" not in iri[:-1]
 
 
 def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: str) -> None:
