@@ -12,9 +12,9 @@ triple then rewrites only the lines it actually touches.
 
 The functions here operate on **already-canonicalized** pyoxigraph quads.
 They are the composable primitive behind :func:`diffable_rdf.deterministic_turtle`,
-exposed separately so that tools which already run RDFC-1.0 themselves
-(for example the LinkML generators) can add diff stability as a single
-extra step without replacing their own serialization pipeline.
+exposed separately so that a pipeline which already runs RDFC-1.0 itself can
+add diff stability as a single extra step, keeping its own serialization,
+prefix handling and base IRI.
 
 References
 ----------
@@ -53,8 +53,8 @@ def wl_blank_node_labels(
         Number of WL refinement rounds.  The default (``None``) refines
         each connected blank-node component until its partition stops
         changing (the WL fixpoint), which yields the most diff-stable
-        labelling; pass an explicit integer to force exactly that many
-        rounds across the whole dataset.
+        labelling.  An explicit integer forces exactly that many rounds
+        across the whole dataset; ``0`` or a negative number runs none.
 
     Returns
     -------
@@ -82,12 +82,11 @@ def wl_blank_node_labels(
 
     A quad's graph is part of its contribution to a signature, so the same
     structure in two different named graphs receives different labels and
-    moving a triple between graphs relabels the nodes involved.  The graph
-    term is omitted for the default graph, which keeps labels identical to
-    those produced before graph membership was considered -- datasets with
-    no named graphs are unaffected.  A blank node used *as* a graph name is
-    labelled from the quads it names, so it is no longer indistinguishable
-    from every other graph-name node.
+    moving a triple between graphs relabels the nodes involved.  The default
+    graph contributes no graph term, so a dataset with no named graphs is
+    labelled from its triples alone.  A blank node used *as* a graph name is
+    labelled from the quads it names, which distinguishes it from other
+    graph-name nodes.
 
     One case remains unresolved by design: two graphs *named by blank
     nodes* whose contents are structurally identical still yield tied
@@ -114,12 +113,11 @@ def wl_blank_node_labels(
     def graph_tag(graph_name) -> str:
         """A stable, blank-node-free key for the graph a quad lives in.
 
-        The empty string for the default graph, so that a dataset with no
-        named graphs produces byte-identical signatures to the version of
-        this function that ignored ``graph_name`` entirely -- otherwise
-        every already-committed artifact would be relabelled.  A blank-node
-        graph name collapses to a constant, because a blank node's own
-        identifier must never enter a signature.
+        The empty string for the default graph, so a dataset with no named
+        graphs is labelled from its triples alone and its signatures do not
+        depend on graph handling at all.  A blank-node graph name collapses
+        to a constant, because a blank node's own identifier must never
+        enter a signature.
         """
         if isinstance(graph_name, pyoxigraph.DefaultGraph):
             return ""
@@ -212,8 +210,10 @@ def wl_blank_node_labels(
                 previous_classes = classes
 
     if iterations is not None:
-        # An explicit count retains the historical contract: every blank node
-        # is synchronously refined for exactly the requested number of rounds.
+        # An explicit count means exactly that: every blank node is refined
+        # synchronously for the requested number of rounds, with no
+        # per-component fixpoint check. A count of zero or less refines
+        # nothing, leaving each label derived from its named-node edges.
         refine(bnode_ids, iterations, stop_at_fixpoint=False)
     else:
         visited: set[str] = set()

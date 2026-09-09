@@ -12,9 +12,9 @@ P3   **Label-independent.** Two inputs differing only in blank node identifiers
 P4   **Order-independent.** The order triples were added in does not affect output.
 ===  ============================================================================
 
-The graphs are produced by a seeded generator rather than by hand, because the defect that
-motivated this module — a list cell referenced from two places, which rdflib's Turtle
-serializer inlines and thereby detaches (issue #1) — is the kind of shape nobody writes on
+The graphs are produced by a seeded generator rather than by hand, because the shape these
+promises are hardest to keep for — a list cell referenced from two places, which rdflib's
+Turtle serializer inlines and thereby detaches — is the kind of shape nobody writes on
 purpose. Seeds are fixed, so a failure is reproducible; the seed is reported in the assertion
 message.
 """
@@ -72,7 +72,7 @@ def _add_list(graph: Graph, rng: random.Random, values: list) -> BNode:
 
 
 def _random_graph(seed: int) -> Graph:
-    """A small graph covering the shapes that have historically broken canonicalization."""
+    """A small graph covering the shapes that break naive canonicalization."""
     rng = random.Random(seed)
     graph = Graph()
     graph.bind("ex", EX)
@@ -110,8 +110,8 @@ def _random_graph(seed: int) -> Graph:
             # shared head: several statements point at the same list
             graph.add((rng.choice(subjects), EX.alsoItems, head))
         if rng.random() < 0.5:
-            # shared interior cell: a statement points into the middle of a chain. This is the
-            # shape that silently lost data before the fix for issue #1.
+            # shared interior cell: a statement points into the middle of a chain. An inline
+            # ``( … )`` consumes that cell and leaves the other reference undefined.
             interior = graph.value(head, RDF.rest)
             if interior is not None and interior != RDF.nil:
                 graph.add((rng.choice(subjects), EX.tail, interior))
@@ -223,7 +223,7 @@ def test_p4_output_does_not_depend_on_insertion_order(seed: int) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# targeted regressions for issue #1
+# targeted regressions for shared rdf:List cells
 # ─────────────────────────────────────────────────────────────────────────────
 
 SHARING_CASES = {
@@ -271,10 +271,11 @@ PREAMBLE = (
 def test_shared_list_structures_survive_canonicalization(name: str) -> None:
     """Every arrangement of shared rdf:List cells must round-trip exactly.
 
-    Before the fix for issue #1, ``shared_interior_cell`` lost a list entirely - the cell was
-    consumed by an inline ``( … )`` and the second reference was left undefined - while
-    ``shared_head_*`` duplicated the list once per reference, so the triple count grew on every
-    pass and canonicalization never reached a fixed point.
+    The two ways compact collection syntax gets this wrong pull in opposite directions.
+    ``shared_interior_cell`` loses a list entirely: the cell is consumed by an inline
+    ``( … )`` and the second reference is left undefined. ``shared_head_*`` duplicates the
+    list once per reference, so the triple count grows on every pass and canonicalization
+    never reaches a fixed point.
     """
     graph = Graph()
     graph.parse(data=PREAMBLE + SHARING_CASES[name], format="turtle")
@@ -293,9 +294,9 @@ def test_shared_list_structures_survive_canonicalization(name: str) -> None:
 def test_no_dangling_blank_node_references(name: str) -> None:
     """No statement may point at a blank node the output never defines.
 
-    This is the specific corruption behind issue #1: ``ex:s2 ex:items _:t`` survived while
-    ``_:t``'s own ``rdf:first``/``rdf:rest`` did not, so the constraint silently referred to
-    nothing.
+    The corruption this rules out: ``ex:s2 ex:items _:t`` survives while ``_:t``'s own
+    ``rdf:first``/``rdf:rest`` do not, so the constraint silently refers to nothing. The
+    output parses cleanly, which is what makes it dangerous.
     """
     graph = Graph()
     graph.parse(data=PREAMBLE + SHARING_CASES[name], format="turtle")
@@ -313,8 +314,8 @@ def test_no_dangling_blank_node_references(name: str) -> None:
 def test_list_cells_are_neither_lost_nor_duplicated() -> None:
     """The number of rdf:List cells is preserved exactly.
 
-    Counting cells catches both directions of the issue #1 failure in one assertion: inlining a
-    shared head duplicates cells, and inlining a shared interior cell detaches them.
+    Counting cells catches both failure directions in one assertion: inlining a shared head
+    duplicates cells, and inlining a shared interior cell detaches them.
     """
     graph = Graph()
     graph.parse(
@@ -333,8 +334,9 @@ def test_list_cells_are_neither_lost_nor_duplicated() -> None:
 def test_repeated_canonicalization_reaches_a_fixed_point() -> None:
     """Ten passes over a graph full of shared lists must not drift.
 
-    The original symptom of issue #1 was unbounded growth: 76 further ``rdf:first`` and 76
-    further ``rdf:rest`` triples on every pass, with no fixed point.
+    Duplicating a shared list is unbounded growth rather than a one-off error: on this graph
+    it adds 76 further ``rdf:first`` and 76 further ``rdf:rest`` triples per pass, with no
+    fixed point to converge on.
     """
     graph = Graph()
     graph.parse(data=PREAMBLE + "".join(SHARING_CASES.values()), format="turtle")
@@ -352,9 +354,9 @@ def _many_lists_sharing_tails(count: int = 12) -> Graph:
 
     This is the shape of a real SHACL shapes graph produced from an ontology with dozens of
     enumerations: several ``sh:in`` constraints share a list, and lists that end in the same
-    value share their final cell. It is the arrangement that defeated the first attempt at
-    fixing issue #1 - a sharing-aware collection heuristic was not sufficient, because rdflib
-    chooses where to inline by a traversal that depends on blank node ordering.
+    value share their final cell. Predicting which cells are safe to inline does not work
+    here - rdflib chooses by a traversal that depends on blank node ordering - which is why
+    the guarantee rests on checking the rendered output instead.
     """
     graph = Graph()
     graph.bind("ex", EX)
@@ -415,13 +417,13 @@ def test_collection_free_serializer_is_faithful_for_every_sharing_case() -> None
 def test_owl_shaped_graph_canonicalizes_within_a_time_budget() -> None:
     """A mid-sized OWL-shaped ontology must canonicalize in seconds, not minutes.
 
-    The round-trip guard used to be ``rdflib.compare.isomorphic``, which
-    canonicalizes in Python and cost ~96% of the total runtime: 8,400
-    triples took 76s, and 3x the triples cost 17x the time. Comparing
-    RDFC-1.0 canonical forms instead is an exact isomorphism test that
-    pyoxigraph performs in Rust. This is a smoke bound, not a benchmark --
-    the budget is wide enough to absorb slow CI runners and narrow enough
-    that a regression to the Python path fails it by an order of magnitude.
+    The guard compares RDFC-1.0 canonical forms, an exact isomorphism test
+    that pyoxigraph performs in Rust. The Python alternative,
+    ``rdflib.compare.isomorphic``, costs ~96% of the total runtime on this
+    graph: 8,400 triples in 76s, with 3x the triples costing 17x the time.
+    This is a smoke bound, not a benchmark -- the budget is wide enough to
+    absorb slow CI runners and narrow enough that falling back to the
+    Python path fails it by an order of magnitude.
     """
     script = textwrap.dedent(
         """

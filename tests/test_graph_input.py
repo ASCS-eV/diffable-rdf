@@ -41,7 +41,7 @@ class DatasetSubclass(Dataset):
 
 
 class ConjunctiveGraphSubclass(ConjunctiveGraph):
-    """A legacy dataset subtype must retain the same container contract."""
+    """A ConjunctiveGraph subtype must retain the same container contract."""
 
 
 def _new_container(container_type: type[ConjunctiveGraph]) -> ConjunctiveGraph:

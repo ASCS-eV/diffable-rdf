@@ -8,7 +8,8 @@ from dataclasses import dataclass
 # JSON-LD keys whose array values carry ordering semantics and must NOT be
 # sorted.  ``@context`` arrays define an override cascade (JSON-LD 1.1 §4.1);
 # ``@list`` containers are explicitly ordered; ``@graph``/``@set`` and
-# ``imports`` are included defensively.
+# ``imports`` are protected defensively, since reordering them is never
+# needed for a diff and can change what a consumer reads.
 _JSONLD_ORDERED_KEYS: frozenset[str] = frozenset({"@context", "@list", "@graph", "@set", "imports"})
 _JSONLD_KEYWORDS: frozenset[str] = frozenset(
     {
@@ -172,29 +173,31 @@ def deterministic_json(
 ) -> str:
     """Serialize a JSON-compatible object with deterministic ordering.
 
-    Recursively sorts dict keys and unordered list elements to produce stable
-    output across Python versions and process invocations. JSON-LD arrays with
-    ordering semantics are retained, including ``@list`` values, ``@json``
-    literal payloads, and properties declared with ``@container: @list`` or
-    ``@type: @json`` in a local context.
+    Recursively sorts dict keys and unordered list elements, so equal data
+    serializes to equal text across Python versions and processes. Keys sort
+    by the name ``json.dumps`` will write and list elements by their own
+    serialized JSON text, which orders ``[2, 10, 1]`` as ``[1, 10, 2]``: this
+    is an ordering helper for diffable output, not a JSON canonicalization
+    scheme and not a JSON-LD processor. The argument is not modified.
 
-    List elements are recursively ordered, then sorted by their serialized JSON
-    representation. Dictionary order at that stage already follows encoded key
-    names, so mixed key types remain comparable without changing the keys.
+    Arrays whose order carries JSON-LD meaning are left alone: ``@list``
+    values, ``@json`` literal payloads, and terms declared with
+    ``@container: @list`` or ``@type: @json`` in a local ``@context``,
+    including keyword aliases, ordered context arrays, inheritance by nested
+    objects, and a ``null`` reset. Remote contexts, ``@import``, scoped
+    contexts and definitions whose ordering cannot be settled locally are
+    never fetched; from such a value on, every descendant array is retained,
+    which also covers a ``@context: null`` that is itself data inside an
+    unrecognized ``@json`` property.
 
     :param obj: A JSON-serializable object.
-    :param indent: Number of spaces for indentation.
-    Local context arrays are applied in order and inherited by nested objects;
-    a null context resets them. Remote, imported, scoped, or unsupported
-    contexts are never loaded. Once such a context can affect a value, all
-    descendant arrays are conservatively retained, even if the data contains
-    ``@context: null``. This helper does not perform full JSON-LD context
-    processing.
-
-    :param preserve_list_order_keys: Dict keys whose list values must not be
-        sorted. Defaults to the legacy set of JSON-LD ordered keys. Semantic
-        ``@list`` and ``@json`` protections apply independently.
+    :param indent: Number of spaces of indentation, passed to ``json.dumps``.
+    :param preserve_list_order_keys: Dict keys whose immediate list value
+        keeps its order. Defaults to ``@context``, ``@list``, ``@graph``,
+        ``@set`` and ``imports``; a set passed here replaces that default,
+        while the JSON-LD keyword protections above still apply.
     :returns: Deterministic JSON string.
+    :raises TypeError: From ``json.dumps``, for a value it cannot encode.
     """
     skip = preserve_list_order_keys if preserve_list_order_keys is not None else _JSONLD_ORDERED_KEYS
 

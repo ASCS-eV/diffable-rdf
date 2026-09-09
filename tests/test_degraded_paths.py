@@ -2,10 +2,9 @@
 
 pyoxigraph rejects some graphs that rdflib happily accepts — notably
 literal predicates (produced by SHACL annotation mode) and relative
-IRIs.  Historically the fallback for those graphs returned a plain
-``graph.serialize()``, which assigns blank-node labels from run-local
-state and is therefore **not** reproducible across processes.  That
-silently violated the core promise of this library.
+IRIs.  A plain ``graph.serialize()`` for those graphs assigns blank-node
+labels from run-local state and is therefore **not** reproducible across
+processes, which would silently break the core promise of this library.
 
 These tests pin the contract: every public entry point stays
 byte-reproducible across independent interpreter processes, including
@@ -184,7 +183,7 @@ def test_wl_relabel_quads_is_diff_stable():
         (str(q.subject), str(q.predicate), str(q.object))
         for q in wl_relabel_quads(_canonical_quads(_shapes_graph(20, extra=True)))
     }
-    # Every original statement survives verbatim; only the new ones appear.
+    # Every statement of the smaller graph survives verbatim; only the new ones appear.
     assert before <= after
     assert len(after - before) == 2
 
@@ -316,9 +315,9 @@ def test_wl_labels_are_unchanged_for_default_graph_input() -> None:
 def test_canonicalize_rdf_graph_is_deterministic_across_processes(output_format: str) -> None:
     """Every supported format must be byte-identical across interpreters.
 
-    Formats pyoxigraph cannot handle (notably ``json-ld``) used to bypass
-    canonicalization entirely and return raw rdflib output, leaking
-    run-local blank-node labels and set-iteration node ordering.
+    Raw rdflib output would leak two process-local orderings into the file:
+    run-local blank-node labels, and the set-iteration order in which node
+    objects are written. Neither is visible within a single process.
     """
     script = textwrap.dedent(
         """
@@ -348,7 +347,7 @@ def test_canonicalize_rdf_graph_is_deterministic_across_processes(output_format:
 
 
 def _chain_graph(chains: int = 20, depth: int = 4) -> Graph:
-    """Blank-node chains shaped like the OWL restrictions owlgen emits."""
+    """Blank-node chains shaped like the OWL restrictions ontology tooling emits."""
     g = Graph()
     for i in range(chains):
         prev = BNode()
@@ -494,10 +493,10 @@ def test_degraded_turtle_is_lossless_for_shared_list_tails() -> None:
     """The degraded path must not detach a shared list cell.
 
     Compact ``( … )`` collection syntax can only express a list whose tail is
-    referenced once. The degraded path used to render with rdflib's default
-    serializer and return the result unchecked, so a graph with a shared tail
-    plus one relative IRI came back with a dangling blank-node reference --
-    issue #1, on the one path that had no round-trip guard.
+    referenced once. This path cannot fall back on a round-trip check, because
+    it deliberately passes relative IRIs through verbatim and so cannot be
+    compared with the input; it renders list structure explicitly instead, and
+    that is what this test holds it to.
     """
     graph = Graph()
     graph.parse(data=SHARED_TAIL_TURTLE, format="turtle")
@@ -604,13 +603,12 @@ def test_degraded_json_ld_rejects_literal_predicates() -> None:
 def test_canonicalize_rdf_graph_accepts_mixed_case_format_names(output_format: str) -> None:
     """A mixed-case format alias must round-trip, not raise.
 
-    ``_assert_round_trips`` used to hand the caller's raw ``output_format``
-    to ``rdflib.Graph.parse``, whose plugin lookup is case-sensitive -- so a
-    format pyoxigraph accepted case-insensitively (e.g. "Turtle") came back
-    out of the round-trip guard as a ValueError reporting a parser-plugin
-    miss ("No plugin registered for (Turtle, ...)") rather than a real
-    round-trip failure. Every other format lookup in this module normalises
-    case; the round-trip check must too.
+    Format lookup is case-insensitive throughout, so ``"Turtle"`` reaches
+    pyoxigraph and serializes. ``rdflib.Graph.parse``'s plugin lookup is
+    not: handing it the caller's raw spelling reports a parser-plugin miss
+    ("No plugin registered for (Turtle, ...)") as a ValueError from the
+    round-trip guard, which reads as a fidelity failure and is not one. The
+    guard normalises case for the same reason every other lookup here does.
     """
     graph = Graph()
     graph.bind("ex", EX)

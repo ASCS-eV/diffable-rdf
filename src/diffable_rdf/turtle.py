@@ -2,9 +2,6 @@
 
 Three-phase hybrid pipeline: RDFC-1.0 canonicalization (pyoxigraph) ->
 Weisfeiler-Lehman blank-node hashing -> idiomatic rdflib re-serialization.
-
-Extracted from ASCS-eV/linkml (feat/deterministic-output, PR #1) into a
-standalone, tool-agnostic library.
 """
 
 from __future__ import annotations
@@ -249,9 +246,9 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
             if term.datatype:
                 dt_iri = term.datatype.value
                 # In RDF 1.1, simple literals are syntactic sugar for
-                # xsd:string (Turtle §2.5.1).  Preserve the shorter form
-                # to match the original owlgen output and avoid spurious
-                # diffs on every string literal.
+                # xsd:string (Turtle §2.5.1).  Write the shorter form, so
+                # every string literal does not carry a redundant datatype
+                # annotation that says nothing about the term.
                 if dt_iri == "http://www.w3.org/2001/XMLSchema#string":
                     return Literal(term.value)
                 return Literal(term.value, datatype=URIRef(dt_iri), normalize=False)
