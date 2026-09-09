@@ -413,7 +413,10 @@ def canonicalize_rdf_graph(
             format=ox_format,
         )
         used_prefixes = None
-    result = result_bytes.decode("utf-8")
+    # pyoxigraph's serialize() stub is a single flat `-> bytes | None` with no
+    # overload distinguishing output=None (returns bytes) from output=<stream>
+    # (returns None). Neither call above passes output=, so this is always bytes.
+    result = result_bytes.decode("utf-8")  # type: ignore[union-attr]
     if ox_format == ox.RdfFormat.JSON_LD:
         # pyoxigraph emits compact single-line JSON; re-render it indented so
         # the output is diffable line by line, which is the point of this
