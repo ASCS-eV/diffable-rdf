@@ -240,10 +240,17 @@ a JSON canonicalization scheme, and not a JSON-LD processor.
 - `obj` — a JSON-serializable object.
 - `indent` — spaces of indentation, passed to `json.dumps`.
 - `preserve_list_order_keys` — keys whose immediate array value keeps its
-  order. Defaults to `{"@context", "@list", "@graph", "@set", "imports"}`. A
-  set you pass **replaces** that default, so `imports` loses its protection
-  unless you include it. The JSON-LD keyword protections below apply either
-  way, including under an empty set.
+  order. Defaults to `{"@context", "@list", "imports"}`. A set you pass
+  **replaces** that default, so `imports` loses its protection unless you
+  include it. The JSON-LD keyword protections below apply either way,
+  including under an empty set.
+
+`@graph` and `@set` are **not** protected, and their arrays sort like any
+other. JSON-LD arrays carry no order unless a container says they do, and
+`@set` exists to express "an unordered set of data" (JSON-LD 1.1 §1.7, §4.3.2);
+`@list` is the ordered one (§4.3.1). An ordered construct nested inside a
+`@graph` or `@set` array still keeps its order, because that protection comes
+from the keyword rather than from the enclosing key.
 
 **Returns.** `str`. The input object is not modified.
 
