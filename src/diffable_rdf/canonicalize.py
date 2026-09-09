@@ -194,6 +194,23 @@ def _finalize_rdf_xml(serialized: str) -> str:
     return serialized.replace("\r", "&#xD;")
 
 
+def _with_single_trailing_newline(text: str) -> str:
+    """Return ``text`` ending in exactly one newline, or empty if it has none.
+
+    A file with no final newline shows up in a diff as "\\ No newline at end of
+    file", and many editors and tools add one, which then reads as a spurious
+    change the next time the artifact is regenerated -- precisely the churn
+    this library exists to remove. Serializers disagree here: pyoxigraph's
+    RDF/XML writer ends without a newline while its Turtle writer ends with
+    one, and rdflib's Turtle writer ends with two.
+
+    An empty graph stays an empty document rather than becoming a lone
+    newline.
+    """
+    stripped = text.rstrip("\n")
+    return stripped + "\n" if stripped else ""
+
+
 def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -> str:
     """Serialize a graph that pyoxigraph cannot canonicalize, deterministically.
 
@@ -520,8 +537,9 @@ def canonicalize_rdf_graph(
         # this library can make it without reimplementing someone else's
         # serializer. What it cannot fix is a plugin whose *traversal* order
         # varies; see the guarantee wording in the docstring above.
-        data = _deterministic_fallback_serialize(graph, output_format)
-        return data.rstrip("\n") + "\n" if data.endswith("\n") else data
+        return _with_single_trailing_newline(
+            _deterministic_fallback_serialize(graph, output_format)
+        )
 
     if ox_format == ox.RdfFormat.RDF_XML:
         _assert_xml_10_representable(graph)
@@ -543,7 +561,9 @@ def canonicalize_rdf_graph(
             "canonicalized with pyoxigraph RDFC-1.0."
         )
         result = _deterministic_fallback_serialize(graph, output_format)
-        return _finalize_rdf_xml(result) if ox_format == ox.RdfFormat.RDF_XML else result
+        if ox_format == ox.RdfFormat.RDF_XML:
+            result = _finalize_rdf_xml(result)
+        return _with_single_trailing_newline(result)
 
     dataset = ox.Dataset()
     for triple in triples:
@@ -628,4 +648,4 @@ def canonicalize_rdf_graph(
         result = _expand_trailing_dot_curies(result, used_prefixes)
     if ox_format in _VERIFIED_FORMATS:
         _assert_round_trips(graph, result, output_format)
-    return result
+    return _with_single_trailing_newline(result)
