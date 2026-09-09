@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rdflib import Graph as RdfGraph
+    from rdflib.term import Node
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +134,8 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
         import pyoxigraph
     except ImportError as exc:
         raise ImportError(
-            "pyoxigraph >= 0.4.0 is required for --deterministic output. "
-            "Install it with: pip install 'pyoxigraph>=0.4.0'"
+            "pyoxigraph >= 0.5.4 is required for deterministic_turtle(). "
+            "Install it with: pip install 'pyoxigraph>=0.5.4'"
         ) from exc
 
     from rdflib import BNode, Graph, Literal, URIRef
