@@ -178,9 +178,9 @@ def deterministic_json(
     literal payloads, and properties declared with ``@container: @list`` or
     ``@type: @json`` in a local context.
 
-    List elements are sorted by their canonical JSON representation
-    (``json.dumps(item, sort_keys=True)``), which handles lists of dicts,
-    strings, and mixed types.
+    List elements are recursively ordered, then sorted by their serialized JSON
+    representation. Dictionary order at that stage already follows encoded key
+    names, so mixed key types remain comparable without changing the keys.
 
     :param obj: A JSON-serializable object.
     :param indent: Number of spaces for indentation.
@@ -260,7 +260,7 @@ def deterministic_json(
             if preserve_current_list or preserve_descendant_lists or context.unknown:
                 return sorted_items
             try:
-                return sorted(sorted_items, key=lambda x: json.dumps(x, sort_keys=True, ensure_ascii=False))
+                return sorted(sorted_items, key=lambda x: json.dumps(x, ensure_ascii=False))
             except TypeError:
                 return sorted_items
         return value
