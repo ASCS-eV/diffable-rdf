@@ -227,14 +227,19 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
         # mode). Degrade to the deterministic rdflib path rather than
         # crashing: the output is no longer diff-stable, but it is still
         # reproducible across processes.
-        from diffable_rdf.canonicalize import _deterministic_fallback_serialize
+        from diffable_rdf.canonicalize import (
+            _deterministic_fallback_serialize,
+            _with_single_trailing_newline,
+        )
 
         logger.warning(
             "Graph contains non-standard RDF (e.g. relative IRIs or literal predicates) "
             "that pyoxigraph cannot parse; falling back to rdflib. Output is still "
             "deterministic but is not diff-stable."
         )
-        return _deterministic_fallback_serialize(graph, "turtle")
+        return _with_single_trailing_newline(
+            _deterministic_fallback_serialize(graph, "turtle")
+        )
 
     dataset.canonicalize(pyoxigraph.CanonicalizationAlgorithm.RDFC_1_0)
 
@@ -337,7 +342,11 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
                 f"{len(result_graph)} triples in. This is a bug in diffable-rdf: please report "
                 "it with the input graph."
             )
-    return text
+    # _render appends a newline unconditionally, which turns an empty graph
+    # into a lone newline; normalise here so every return agrees.
+    from diffable_rdf.canonicalize import _with_single_trailing_newline
+
+    return _with_single_trailing_newline(text)
 
 
 

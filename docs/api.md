@@ -478,6 +478,11 @@ Identical bytes across two runs assume the same inputs to the whole pipeline:
   the `Graph` you pass. If you parsed that graph from a file, rdflib may
   already have normalized values on the way in; lexical text lost there cannot
   be recovered here.
+- **Every output ends with exactly one newline.** Serializers disagree about
+  this — pyoxigraph's RDF/XML writer ends without one, rdflib's Turtle writer
+  ends with two — and a missing final newline is itself a diff, so it is
+  normalized. An empty graph is the exception: Turtle and N-Triples write
+  nothing for it, and an empty document stays empty.
 - **The graph, not the file.** `"a"^^xsd:string` is written `"a"`: under
   RDF 1.1 a literal with no datatype IRI and no language tag has datatype
   `xsd:string` (Turtle §2.5.1), so those are one term. Language tags are
