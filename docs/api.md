@@ -62,7 +62,10 @@ RFC 3986 correct for a hash base: under base `http://ex.org/d#`, the IRI
 
 **Arguments.** `graph` — a single `rdflib.Graph`.
 
-**Returns.** `str`, Turtle with `@prefix` declarations.
+**Returns.** `str`, Turtle with `@prefix` declarations. Typed literals are
+written in quoted form (`"42"^^xsd:integer`), which
+[`canonicalize_rdf_graph`](#canonicalize_rdf_graph) does not do — see the
+comparison there.
 
 **Raises.**
 
@@ -121,6 +124,27 @@ This is the lower-level entry point: blank nodes keep their RDFC-1.0 `c14nN`
 labels, which are deterministic but sequential, so inserting a triple can
 renumber the rest. For output kept in version control, prefer
 `deterministic_turtle`, or apply `wl_relabel_quads` in your own pipeline.
+
+**The two entry points lay Turtle out differently.** Both are correct and both
+preserve every term exactly; only the presentation differs, so the same graph
+through each parses to the same RDF. For the graph
+`ex:s ex:count 42 ; ex:flag true`:
+
+| | `deterministic_turtle` | `canonicalize_rdf_graph` |
+|---|---|---|
+| Typed literals | `"42"^^xsd:integer` | `42` |
+| Indentation | four spaces | one tab |
+| Prefix order | as bound, then generated | as pyoxigraph emits them |
+| After the prefixes | one blank line | none |
+
+The literal spelling is the difference that matters. `deterministic_turtle`
+renders every typed literal in quoted form, because Turtle's numeric and
+boolean short forms ask rdflib to write the Python *value*: that merges terms
+RDF 1.1 keeps distinct and can shorten a double's lexical form.
+`canonicalize_rdf_graph` goes through pyoxigraph, whose short forms reproduce
+the lexical form as written — `"1.230"^^xsd:decimal` comes out `1.230`, not
+`1.23` — and its output is round-trip verified, so it is exact too. Pick on
+appearance, not on fidelity; do not diff one against the other.
 
 **Arguments.**
 
