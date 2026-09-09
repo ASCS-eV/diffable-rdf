@@ -6,9 +6,12 @@ import json
 from dataclasses import dataclass
 
 # JSON-LD keys whose array values carry ordering semantics and must NOT be
-# sorted.  ``@context`` arrays define an override cascade (JSON-LD 1.1 §4.1);
-# ``@list`` containers are explicitly ordered; ``@graph``/``@set`` and
-# ``imports`` are protected defensively, since reordering them is never
+# sorted.  An ``@context`` array is processed in order, each entry overriding
+# the last -- the JSON-LD 1.1 API's Context Processing Algorithm (§4.1) wraps a
+# non-array local context in an array at step 4 and iterates it at step 5:
+# https://www.w3.org/TR/json-ld11-api/#context-processing-algorithm
+# ``@list`` is the ordered container (JSON-LD 1.1 §4.3.1).  ``@graph``/``@set``
+# and ``imports`` are protected defensively, since reordering them is never
 # needed for a diff and can change what a consumer reads.
 _JSONLD_ORDERED_KEYS: frozenset[str] = frozenset({"@context", "@list", "@graph", "@set", "imports"})
 _JSONLD_KEYWORDS: frozenset[str] = frozenset(

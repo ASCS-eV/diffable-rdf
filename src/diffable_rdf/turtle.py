@@ -160,7 +160,11 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
          Jena, Eclipse RDF4J, and Raptor.
 
     All triples from the source graph are preserved — the hybrid step
-    only changes syntactic form, never semantic content.
+    only changes syntactic form, never semantic content.  Typed literals keep
+    their exact lexical form, because RDF 1.1 term equality compares lexical
+    forms character by character [3]_: ``"1"^^xsd:integer`` and
+    ``"01"^^xsd:integer`` denote one value but are two distinct RDF terms, and
+    collapsing them would drop a triple.
 
     Parameters
     ----------
@@ -180,10 +184,14 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
 
     References
     ----------
-    .. [1] W3C (2024). "RDF Dataset Canonicalization (RDFC-1.0)."
-       W3C Recommendation.  https://www.w3.org/TR/rdf-canon/
+    .. [1] W3C (2024). "RDF Dataset Canonicalization." W3C Recommendation,
+       21 May 2024.  Defines the RDFC-1.0 algorithm.
+       https://www.w3.org/TR/rdf-canon/
     .. [2] W3C (2014). "RDF 1.1 Turtle — Terse RDF Triple Language."
        W3C Recommendation.  https://www.w3.org/TR/turtle/
+    .. [3] W3C (2014). "RDF 1.1 Concepts and Abstract Syntax", §3.3 Literals
+       (literal term equality) and §3.6 Graph Comparison (isomorphism).
+       W3C Recommendation.  https://www.w3.org/TR/rdf11-concepts/
     """
     _require_single_graph(graph)
 

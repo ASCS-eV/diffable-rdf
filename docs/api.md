@@ -46,7 +46,10 @@ recovers inline blank nodes `[ … ]`, collection syntax `( … )` and prefix
 declarations limited to the namespaces the graph uses.
 
 The rendered text is re-parsed and compared with the input as RDFC-1.0
-canonical forms — an exact isomorphism test. Turtle's `( … )` syntax can only
+canonical forms. RDFC-1.0 ([RDF Dataset Canonicalization][rdfc], a W3C
+Recommendation of 21 May 2024) produces one canonical form per isomorphism
+class, so comparing those forms is an exact isomorphism test in the sense of
+[RDF 1.1 Concepts §3.6][concepts]. Turtle's `( … )` syntax can only
 express a list whose tail is referenced once, and canonicalization readily
 produces graphs where several lists share a tail, so when the compact form does
 not round-trip the graph is re-rendered with explicit `rdf:first`/`rdf:rest`
@@ -451,14 +454,27 @@ Identical bytes across two runs assume the same inputs to the whole pipeline:
   the `Graph` you pass. If you parsed that graph from a file, rdflib may
   already have normalized values on the way in; lexical text lost there cannot
   be recovered here.
-- **The graph, not the file.** Language tags are lowercased and
-  `"a"^^xsd:string` is written `"a"` — both the same term under RDF 1.1. Other
-  typed lexical forms are preserved exactly, including `"01"^^xsd:integer`
-  versus `"1"^^xsd:integer`, `"1"^^xsd:boolean` versus `"true"^^xsd:boolean`,
-  and `Z` versus `+00:00` in a `xsd:dateTime`.
+- **The graph, not the file.** `"a"^^xsd:string` is written `"a"`: under
+  RDF 1.1 a literal with no datatype IRI and no language tag has datatype
+  `xsd:string` (Turtle §2.5.1), so those are one term. Language tags are
+  lowercased — a conversion [RDF 1.1 Concepts §3.3][concepts] explicitly
+  permits ("Lexical representations of language tags MAY be converted to lower
+  case. The value space of language tags is always in lower case"), though note
+  that it is a change of lexical representation rather than an identity: §3.3
+  compares language tags character by character. Every other typed lexical form
+  is preserved exactly, including `"01"^^xsd:integer` versus
+  `"1"^^xsd:integer`, `"1"^^xsd:boolean` versus `"true"^^xsd:boolean`, and `Z`
+  versus `+00:00` in a `xsd:dateTime`. That is required rather than merely
+  polite: §3.3 defines two literals as the same term only if their lexical
+  forms, datatype IRIs and language tags "compare equal, character by
+  character", and the specification's own example is that `"1"^^xsd:integer`
+  and `"01"^^xsd:integer` denote the same value and are *not* the same term.
 
 One consequence worth spelling out: because a language tag's case is
 normalized, `rdflib.compare.isomorphic` — which is stricter than rdflib's own
 `Literal` equality — reports the input and the re-parsed output as
 non-isomorphic across a tag-case change. It cannot be used to check
 losslessness in that case.
+
+[rdfc]: https://www.w3.org/TR/rdf-canon/
+[concepts]: https://www.w3.org/TR/rdf11-concepts/#section-Graph-Literal
