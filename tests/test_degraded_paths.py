@@ -533,22 +533,32 @@ def test_json_ld_is_lossless_for_shared_list_tails() -> None:
     assert "@list" not in result, "expanded JSON-LD must not use @list compaction"
 
 
-def test_canonicalize_rdf_graph_raises_rather_than_emitting_unparseable_turtle() -> None:
-    """Output that rdflib cannot read back must raise, not be returned.
+def test_a_literal_that_looks_like_a_trailing_dot_curie_serializes_intact() -> None:
+    """Literal text is data, and the CURIE repair must not reach into it.
 
-    ``_expand_trailing_dot_curies`` rewrites CURIEs by regex over the
-    serialized text, which can match inside a string literal and corrupt it.
-    Until that is fixed, the round-trip check must at least make the failure
-    loud: a silent lossy canonical form is the one outcome this library must
-    never produce.
+    ``_expand_trailing_dot_curies`` rewrites CURIEs over the serialized text,
+    to work around rdflib's parser rejecting a PN_LOCAL that ends in an escaped
+    dot. It used to run over the whole document, so a literal whose *value*
+    looked like such a CURIE was rewritten -- corrupting the value and
+    producing output that would not parse, which the round-trip guard then
+    turned into a refusal of a perfectly valid graph. The rewrite now skips
+    string literals, so the graph serializes and reads back unchanged.
     """
     graph = Graph()
     graph.bind("ex", EX)
     graph.add((EX.s, EX.p, Literal("see ex:thing\\. more")))
     graph.add((EX.other, EX.p, EX.o))  # makes the ex: prefix used, so it is declared
 
-    with pytest.raises(ValueError, match="does not (parse back|round-trip)"):
-        canonicalize_rdf_graph(graph, output_format="turtle")
+    result = canonicalize_rdf_graph(graph, output_format="turtle")
+    reparsed = Graph().parse(data=result, format="turtle")
+
+    assert isomorphic(reparsed, graph)
+    # The literal's value, not its serialized spelling: Turtle escapes the
+    # backslash, so the document text carries two where the term has one.
+    assert reparsed.value(EX.s, EX.p) == Literal("see ex:thing\\. more")
+    # The other IRI in that namespace keeps its prefix -- the repair stays
+    # narrower than dropping the binding.
+    assert "ex:other" in result
 
 
 def test_degraded_json_ld_is_reproducible_across_processes() -> None:

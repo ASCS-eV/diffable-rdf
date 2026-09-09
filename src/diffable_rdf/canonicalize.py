@@ -308,6 +308,38 @@ def _filter_prefixes_to_used(prefixes: dict[str, str], used_iris: set[str]) -> d
 _PN_LOCAL_ESC_UNESCAPE = re.compile(r"\\([_~.\-!$&'()*+,;=/?#@%])")
 
 
+def _turtle_string_spans(text: str) -> list[tuple[int, int]]:
+    """Return half-open spans of the Turtle string literals in ``text``.
+
+    Used to keep text rewrites out of literal content.  Turtle has four string
+    forms: single- and triple-quoted, each with either quote character, and a
+    backslash escapes the next character inside all of them.  IRIs need no
+    handling: an IRIREF cannot contain an unescaped quote, so one can never
+    open a span.
+    """
+    spans: list[tuple[int, int]] = []
+    index = 0
+    length = len(text)
+    while index < length:
+        character = text[index]
+        if character not in ('"', "'"):
+            index += 1
+            continue
+        delimiter = character * 3 if text[index : index + 3] == character * 3 else character
+        start = index
+        index += len(delimiter)
+        while index < length:
+            if text[index] == "\\":
+                index += 2
+                continue
+            if text.startswith(delimiter, index):
+                index += len(delimiter)
+                break
+            index += 1
+        spans.append((start, index))
+    return spans
+
+
 def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> str:
     """Replace CURIEs whose local part ends in ``\\.`` with full ``<IRI>`` form.
 
@@ -316,6 +348,12 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
     form for IRIs ending in ``.`` (e.g. ``biolink:StrandEnum#.``).  We
     rewrite each such CURIE to its expanded ``<IRI>`` form so the output
     round-trips through rdflib.
+
+    The rewrite is applied only outside string literals.  A literal whose text
+    happens to look like such a CURIE -- ``"ex:thing\\. "`` -- is ordinary RDF
+    data, and rewriting inside it corrupted the value and produced output that
+    would not parse.  Only the other IRIs in that namespace keep their prefix,
+    so this stays more compact than dropping the prefix binding altogether.
     """
     if not prefixes:
         return turtle_text
@@ -340,7 +378,14 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
         local = _PN_LOCAL_ESC_UNESCAPE.sub(r"\1", local_escaped)
         return f"<{namespace}{local}>"
 
-    return pattern.sub(replace, turtle_text)
+    rewritten: list[str] = []
+    cursor = 0
+    for start, end in _turtle_string_spans(turtle_text):
+        rewritten.append(pattern.sub(replace, turtle_text[cursor:start]))
+        rewritten.append(turtle_text[start:end])
+        cursor = end
+    rewritten.append(pattern.sub(replace, turtle_text[cursor:]))
+    return "".join(rewritten)
 
 
 def _is_safe_prefix_iri(iri: str) -> bool:
