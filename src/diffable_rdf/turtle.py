@@ -25,6 +25,7 @@ from rdflib.plugins.serializers.turtle import TurtleSerializer  # noqa: E402
 # The WL labelling primitive lives in diffable_rdf.wl so that tools which
 # already run RDFC-1.0 themselves can reuse it without this serializer.
 from diffable_rdf.wl import wl_blank_node_labels as _wl_signatures  # noqa: E402
+from diffable_rdf.namespaces import prepare_namespaces  # noqa: E402
 
 
 class _LiteralPreservingTurtleSerializer(TurtleSerializer):
@@ -265,21 +266,7 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
             )
         )
 
-    # Bind only prefixes whose namespace IRI is actually referenced
-    # by at least one subject, predicate, or object in the graph.
-    # This filters out rdflib's ~27 built-in default bindings
-    # (brick, csvw, doap, …) that leak through Graph() even when
-    # the schema never declared them.
-    used_iris: set[str] = set()
-    for s, p, o in result_graph:
-        for term in (s, p, o):
-            if isinstance(term, URIRef):
-                used_iris.add(str(term))
-
-    for pfx, ns in sorted(graph.namespaces()):
-        pfx_s, ns_s = str(pfx), str(ns)
-        if pfx_s and any(iri.startswith(ns_s) for iri in used_iris):
-            result_graph.bind(pfx_s, ns_s)
+    prepare_namespaces(result_graph, graph)
 
     # rdflib's Turtle serializer always emits a trailing double newline;
     # normalize to a single newline for consistent file endings.

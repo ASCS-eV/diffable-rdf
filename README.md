@@ -192,7 +192,11 @@ RDF graph are deliberately mapped onto the same output:
   numeric precision and distinct spellings with equal values, such as integer
   `"01"`/`"1"`, boolean `"1"`/`"true"`, and dateTime `Z`/`+00:00`.
 - **Prefix declarations are filtered** to the namespaces the graph
-  actually uses, so unused bindings do not appear in the output.
+  actually uses, so unused bindings do not appear in the output. Caller
+  prefix names take precedence, and otherwise-generated `ns1`, `ns2`, ...
+  names are allocated in stable IRI order, independent of graph insertion
+  order and process hash seed. Literal datatype namespaces participate in
+  the same allocation.
 - **`graph.base` is not carried into the output.** rdflib relativizes
   against a base by naive string prefixing, which is not RFC-3986-correct
   for hash bases: `http://ex.org/d#a` under base `http://ex.org/d#` would
