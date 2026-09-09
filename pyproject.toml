@@ -77,3 +77,6 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Import the package from src/ without requiring an install, so a fresh
+# clone can run `pytest` as its first command.
+pythonpath = ["src"]
