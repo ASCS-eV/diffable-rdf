@@ -60,6 +60,17 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
             # Python value. That can merge distinct RDF terms (``01``/``1``)
             # and can shorten floating-point lexical forms. Quoted literals
             # retain the exact lexical form carried by the RDF term.
+            #
+            # ``_literal_n3`` is private, and used deliberately: the public
+            # ``Literal.n3`` takes only a namespace manager and applies exactly
+            # the shorthand this avoids, so there is no public equivalent.
+            # ``test_the_private_rdflib_api_the_serializer_depends_on_still_fits``
+            # names the coupling if rdflib changes the method's shape. Were its
+            # ``use_plain`` default to flip instead, the measured consequence is
+            # a change of output *form* rather than data loss for values Turtle
+            # can spell -- ``"01"^^xsd:integer`` would render ``01`` and still
+            # round-trip -- while a high-precision double would fail the
+            # round-trip guard outright.
             get_pname = getattr(self, "get_pname", self.getQName)
             return node._literal_n3(
                 use_plain=False,
