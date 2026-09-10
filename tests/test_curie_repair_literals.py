@@ -18,7 +18,7 @@ from rdflib import Graph, Literal, Namespace
 from rdflib.compare import isomorphic
 
 from diffable_rdf import canonicalize_rdf_graph, deterministic_turtle
-from diffable_rdf.canonicalize import _expand_trailing_dot_curies, _turtle_string_spans
+from diffable_rdf.canonicalize import _expand_trailing_dot_curies, _turtle_protected_spans
 
 EX = Namespace("http://example.org/")
 DOTTED = Namespace("https://w3id.org/biolink/vocab/")
@@ -41,14 +41,29 @@ DOTTED = Namespace("https://w3id.org/biolink/vocab/")
         ('a """b"c""" d', ['"""b"c"""']),
         # Two literals in one line are two spans.
         ('"x" p "y"', ['"x"', '"y"']),
-        # An IRI cannot open a span: IRIREF forbids an unescaped quote.
-        ("<http://ex/a> <http://ex/p> <http://ex/b>", []),
+        # An IRIREF is protected too, and for a reason: production [18]
+        # excludes '"' but permits "'", so an apostrophe in an IRI used to
+        # open a string span that swallowed the rest of the document.
+        (
+            "<http://ex/a> <http://ex/p> <http://ex/b>",
+            ["<http://ex/a>", "<http://ex/p>", "<http://ex/b>"],
+        ),
+        ("<http://ex/a'b> <http://ex/p> \"v\"", ["<http://ex/a'b>", "<http://ex/p>", '"v"']),
+        ('"a<b" <http://ex/p>', ['"a<b"', "<http://ex/p>"]),
+        ("<http://ex/a> \"lit'eral\" <http://ex/b>", ["<http://ex/a>", '"lit\'eral"', "<http://ex/b>"]),
+        # An RDF-star quoted triple is a delimiter, not an IRIREF.
+        (
+            "<<<http://ex/s> <http://ex/p> <http://ex/o>>> <http://ex/q> \"v\"",
+            ["<http://ex/s>", "<http://ex/p>", "<http://ex/o>", "<http://ex/q>", '"v"'],
+        ),
+        # Unterminated: protect the remainder rather than guess.
+        ("<http://ex/unterminated", ["<http://ex/unterminated"]),
         ("no literals here", []),
     ],
 )
-def test_the_literal_scanner_finds_exactly_the_string_spans(text: str, expected: list[str]) -> None:
+def test_the_token_scanner_finds_exactly_the_protected_spans(text: str, expected: list[str]) -> None:
     """The scanner is what keeps the rewrite out of data, so pin its edges."""
-    assert [text[start:end] for start, end in _turtle_string_spans(text)] == expected
+    assert [text[start:end] for start, end in _turtle_protected_spans(text)] == expected
 
 
 def test_a_curie_outside_a_literal_is_still_rewritten() -> None:
@@ -142,3 +157,39 @@ def test_a_multiline_literal_containing_a_curie_is_left_alone() -> None:
     text = 'ex:s ex:p """line one\nex:thing\\. line two""" .\n'
 
     assert _expand_trailing_dot_curies(text, prefixes) == text
+
+
+def test_an_apostrophe_in_an_iri_does_not_break_the_dot_repair() -> None:
+    """The scanner's premise was wrong, and it cost a valid graph.
+
+    Turtle's IRIREF production [18] excludes ``"`` but permits ``'``, so
+    ``<http://ex/a'b>`` -- an apostrophe is a ``sub-delim``, legal in an IRI
+    path per RFC 3987 -- opened a phantom string span running to the end of
+    the document. Every later span was shifted, the trailing-dot repair ran
+    inside a literal instead of outside one, and ``canonicalize_rdf_graph``
+    raised "canonical turtle serialization does not parse back" for a graph
+    that is perfectly ordinary.
+    """
+    graph = Graph()
+    graph.bind("dotted", DOTTED)
+    graph.add((EX["a'b"], EX.p, Literal("x")))
+    graph.add((EX.z, EX.p, DOTTED["StrandEnum#."]))
+
+    for output_format in ("turtle", "trig", "n3"):
+        result = canonicalize_rdf_graph(graph, output_format=output_format)
+        assert isomorphic(Graph().parse(data=result, format=output_format), graph), output_format
+
+    assert isomorphic(Graph().parse(data=deterministic_turtle(graph), format="turtle"), graph)
+
+
+def test_an_apostrophe_in_a_literal_still_shields_a_curie_lookalike() -> None:
+    """The reason the scanner exists at all must keep working."""
+    graph = Graph()
+    graph.bind("dotted", DOTTED)
+    graph.add((EX.s, EX.p, Literal("dotted:it's\\. not a curie")))
+    graph.add((EX.z, EX.p, DOTTED["StrandEnum#."]))
+
+    result = canonicalize_rdf_graph(graph, output_format="turtle")
+
+    assert isomorphic(Graph().parse(data=result, format="turtle"), graph)
+    assert graph.value(EX.s, EX.p) == Graph().parse(data=result, format="turtle").value(EX.s, EX.p)
