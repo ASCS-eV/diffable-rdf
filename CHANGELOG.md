@@ -28,6 +28,12 @@ affected artifact, commit it once, and subsequent runs are stable again.
   components previously converged after different numbers of refinement rounds.
   Each component now converges independently, so an edit in one region no
   longer relabels an unrelated one.
+- **Blank-node labels change once more**, where structurally indistinguishable
+  nodes share a signature and are told apart by a `_1`, `_2`, … suffix. Those
+  suffixes are assigned in `c14nN` order, as documented, but the order was read
+  as text: `c14n10` sorted between `c14n1` and `c14n2`. Adding a tenth tied
+  blank node relabelled eight of the nine already there — the opposite of what
+  this labelling is for. Numbers now compare as numbers.
 - **Generated `ns1`, `ns2`, … prefix names are allocated in IRI order**, so the
   same graph gets the same names in every process. Prefixes you bind yourself
   are unaffected and still take precedence.
