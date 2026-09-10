@@ -3,11 +3,16 @@
 This exists because rdflib's own JSON-LD serializer compacts an ``rdf:List``
 into ``@list`` without checking whether anything else references its cells, so
 a shared tail comes back duplicated and non-isomorphic. That is an upstream
-defect, unreported and present in rdflib 7.6.0 (the latest release), which is
-why the degraded path writes expanded node objects itself rather than routing
-through that serializer. It is deliberately not a general JSON-LD processor.
-``tests/test_upstream_tripwires.py`` fails if rdflib fixes the defect, which is
-the signal to reconsider this module.
+defect, present in rdflib 7.6.0 (the latest release), reported as RDFLib/rdflib
+issue #3542 with a fix proposed in pull request #3543 -- which is why the
+degraded path writes expanded node objects itself rather than routing through
+that serializer. It is deliberately not a general JSON-LD processor.
+
+``tests/test_upstream_tripwires.py`` fails once rdflib fixes the defect. That
+is the signal to re-examine this module, not to delete it: routing the degraded
+path back through rdflib's serializer would also give up the deterministic key
+order and the explicit refusal of terms the interoperable subset cannot carry,
+both of which are this library's own requirements rather than workarounds.
 """
 
 from __future__ import annotations

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 
 # The JSON-LD keywords whose array values genuinely carry order, and so must
@@ -243,7 +244,7 @@ def _sorted_items(value: dict) -> list:
 def deterministic_json(
     obj: object,
     indent: int = 3,
-    preserve_list_order_keys: frozenset[str] | None = None,
+    preserve_list_order_keys: AbstractSet[str] | None = None,
 ) -> str:
     """Serialize a JSON-compatible object with deterministic ordering.
 
@@ -272,7 +273,9 @@ def deterministic_json(
     :param preserve_list_order_keys: Dict keys whose immediate list value
         keeps its order. Defaults to ``@context``, ``@list`` and ``imports``;
         a set passed here replaces that default, while the JSON-LD keyword
-        protections above still apply. ``@graph`` and ``@set`` are not
+        protections above still apply. Any set works -- the annotation was
+        ``frozenset[str]`` and a type checker refused the ``{...}`` literal
+        the documentation invites. ``@graph`` and ``@set`` are not
         protected: JSON-LD leaves both unordered, so their arrays are sorted
         like any other.
     :returns: Deterministic JSON string.

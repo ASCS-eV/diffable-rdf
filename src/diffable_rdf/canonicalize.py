@@ -756,7 +756,7 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     """
     from .turtle import _rdfc_canonical_form, _rdfc_canonical_text
 
-    expected = _rdfc_canonical_form(source, ox)
+    expected = _rdfc_canonical_form(source)
     if expected is None:
         return
     ox_format = _FORMAT_MAP[output_format.lower()]
@@ -802,7 +802,7 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     # It normalizes numeric lexical forms, so use pyoxigraph's parsed terms for
     # the exact identity comparison.
     try:
-        actual = _rdfc_canonical_text(serialized, ox_format, ox)
+        actual = _rdfc_canonical_text(serialized, ox_format)
     except SyntaxError as exc:
         raise ValueError(
             f"canonical {output_format} serialization does not parse back "
