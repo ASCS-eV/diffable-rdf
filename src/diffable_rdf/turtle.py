@@ -26,57 +26,109 @@ from diffable_rdf.graph_input import _require_single_graph  # noqa: E402
 from diffable_rdf.namespaces import prepare_namespaces  # noqa: E402
 
 
+def _quote_turtle_string(text: str) -> str:
+    """Return ``text`` as a quoted Turtle string literal.
+
+    Turtle's ``STRING_LITERAL_QUOTE`` excludes only ``"``, ``\\``, LF and CR,
+    so those are the escapes this needs; every other character, including a
+    Unicode line separator, is legal raw. The layout deliberately reproduces
+    what rdflib's own quoting produces -- long-quoted when the value contains a
+    newline, short-quoted otherwise -- so that switching to local rendering
+    does not reformat anybody's existing output.
+    """
+    if "\n" in text:
+        encoded = text.replace("\\", "\\\\")
+        if '"""' in text:
+            encoded = encoded.replace('"""', '\\"\\"\\"')
+        if encoded.endswith('"') and not encoded.endswith('\\"'):
+            encoded = encoded[:-1] + '\\"'
+        return '"""' + encoded.replace("\r", "\\r") + '"""'
+    encoded = text.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r")
+    return '"' + encoded + '"'
+
+
 class _LiteralPreservingTurtleSerializer(TurtleSerializer):
-    """Turtle serializer that always quotes typed literal lexical forms."""
+    """Turtle serializer that writes literals exactly as the graph holds them."""
 
     def sortProperties(self, properties):  # noqa: N802
-        predicate_order = super().sortProperties(properties)
+        """Order predicates, and each predicate's objects, by a total key.
 
-        # rdflib compares numeric Literals by their Python values. Distinct
-        # terms such as ``01`` and ``1`` therefore tie, leaving their output
-        # order dependent on graph iteration. Break only those ties by the
-        # complete RDF term spelling.
-        from functools import cmp_to_key
-
-        def compare(left, right):
-            if left < right:
-                return -1
-            if right < left:
-                return 1
-            if left == right:
-                return 0
-            left_n3, right_n3 = left.n3(), right.n3()
-            return (left_n3 > right_n3) - (left_n3 < right_n3)
-
+        This deliberately does not call ``super()``. rdflib's implementation
+        sorts each object list with a bare ``list.sort()``, which compares
+        ``Literal``s through ``Literal.__lt__`` -- defined as "not greater and
+        not equal" over the *value* space. That comparator is neither total nor
+        exception-safe: distinct terms with equal values tie, so their order
+        falls back to graph iteration order, and a ``NaN`` beside an
+        ``xsd:decimal`` raises ``decimal.InvalidOperation`` from inside the
+        sort. Ordering by the complete RDF term spelling instead is total by
+        construction and cannot raise.
+        """
         for objects in properties.values():
-            objects.sort(key=cmp_to_key(compare))
-        return predicate_order
+            objects.sort(key=self._object_sort_key)
+
+        ordered: list = []
+        seen = set()
+        for predicate in self.predicateOrder:
+            if predicate in properties and predicate not in seen:
+                ordered.append(predicate)
+                seen.add(predicate)
+        for predicate in sorted(properties, key=str):
+            if predicate not in seen:
+                ordered.append(predicate)
+                seen.add(predicate)
+        return ordered
+
+    @staticmethod
+    def _object_sort_key(node: "Node") -> tuple:
+        """A total order over objects that never consults the value space."""
+        from rdflib import BNode, Literal, URIRef
+
+        # Rank kinds in the order rdflib's own comparator produces -- blank
+        # nodes, then IRIs, then literals -- so replacing the comparator does
+        # not reorder anybody's existing output. Within a kind the complete
+        # term spelling decides, which is what makes the order total.
+        if isinstance(node, BNode):
+            return (0, str(node), "", "")
+        if isinstance(node, URIRef):
+            return (1, str(node), "", "")
+        if isinstance(node, Literal):
+            return (2, str(node), node.language or "", str(node.datatype or ""))
+        return (3, str(node), "", "")
 
     def label(self, node: "Node", position: int) -> str:
         from rdflib import Literal
 
         if isinstance(node, Literal):
-            # Turtle numeric and boolean shorthand asks rdflib to render the
-            # Python value. That can merge distinct RDF terms (``01``/``1``)
-            # and can shorten floating-point lexical forms. Quoted literals
-            # retain the exact lexical form carried by the RDF term.
-            #
-            # ``_literal_n3`` is private, and used deliberately: the public
-            # ``Literal.n3`` takes only a namespace manager and applies exactly
-            # the shorthand this avoids, so there is no public equivalent.
-            # ``test_the_private_rdflib_api_the_serializer_depends_on_still_fits``
-            # names the coupling if rdflib changes the method's shape. Were its
-            # ``use_plain`` default to flip instead, the measured consequence is
-            # a change of output *form* rather than data loss for values Turtle
-            # can spell -- ``"01"^^xsd:integer`` would render ``01`` and still
-            # round-trip -- while a high-precision double would fail the
-            # round-trip guard outright.
-            get_pname = getattr(self, "get_pname", self.getQName)
-            return node._literal_n3(
-                use_plain=False,
-                qname_callback=lambda datatype: get_pname(datatype, True),
-            )
+            return self._literal_turtle(node)
         return super().label(node, position)
+
+    def _literal_turtle(self, node) -> str:
+        """Render a literal in quoted form, preserving its lexical text exactly.
+
+        Written here rather than delegated to rdflib's ``Literal._literal_n3``,
+        which re-spells a value-derived form regardless of its ``use_plain``
+        argument: it rewrites ``inf`` to ``INF`` and ``nan`` to ``NaN`` for the
+        numeric datatypes, so every ``xsd:double``/``xsd:float`` NaN or
+        infinity came back with a lexical form the graph never held, and the
+        round-trip guard rightly refused the result. The term carries
+        everything needed to write it, so no private API is required.
+
+        Turtle's numeric and boolean shorthand is not used at all: it renders
+        the Python *value*, which merges distinct RDF terms such as ``01`` and
+        ``1`` and can shorten a double's lexical form.
+        """
+        quoted = _quote_turtle_string(str(node))
+        if node.language:
+            return f"{quoted}@{node.language}"
+        if node.datatype is None:
+            return quoted
+        # gen_prefix=False: this runs in the write phase, after the @prefix
+        # block has been emitted, so a prefix invented here would be used and
+        # never declared. prepare_namespaces has already bound every datatype
+        # namespace the graph uses.
+        get_pname = getattr(self, "get_pname", None) or self.getQName
+        pname = get_pname(node.datatype, False)
+        return f"{quoted}^^{pname or f'<{node.datatype}>'}"
 
 
 class _NoCollectionTurtleSerializer(_LiteralPreservingTurtleSerializer):
