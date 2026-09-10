@@ -30,22 +30,16 @@ See ``docs/api.md`` for the full contract.
    ``xsd:decimal`` (``1.23``).  rdflib parses these back with the
    correct datatype, so this is lossless.
 
-4. **Base IRI interoperability**: Base-relative output is accepted only after
-   both readers preserve every IRI position. If the Turtle-family rendering
-   fails that check, it is rendered once more without a base IRI.
-
-5. **Trailing escaped dot in PN_LOCAL**: pyoxigraph emits CURIEs like
-   ``prefix:local\\.`` for IRIs whose local part ends with ``.``.  This
-   is valid Turtle (PN_LOCAL_ESC), but rdflib's notation3 parser rejects
-   it because it conflicts with the statement-terminator dot.  We
-   post-process Turtle-family output to expand such CURIEs to full ``<IRI>``
-   form.
+4. **Base and prefix interoperability**: A rendering is accepted only after
+   both readers preserve every IRI position. If a rendering fails verification,
+   it is retried without its base IRI and then without prefixes.
+   Prefixes remain optional presentation choices: a complete IRI is used when
+   a backend's compact spelling is not accepted by both readers.
 """
 
 import io
 import json
 import logging
-import re
 from xml.etree import ElementTree
 
 import pyoxigraph as ox
@@ -124,12 +118,9 @@ _RDFLIB_SERIALIZER_NAMES: dict[ox.RdfFormat, str] = {
     ox.RdfFormat.JSON_LD: "json-ld",
 }
 
-# Formats that need the trailing-dot CURIE compatibility rewrite.
 _TURTLE_FAMILY_FORMATS = frozenset({ox.RdfFormat.TURTLE, ox.RdfFormat.TRIG, ox.RdfFormat.N3})
 
 # Formats whose output is verified against the input before being returned.
-# N-Triples and N-Quads have no compact list syntax and receive no text
-# post-processing.
 _VERIFIED_FORMATS = _TURTLE_FAMILY_FORMATS | {ox.RdfFormat.RDF_XML}
 
 
@@ -569,103 +560,6 @@ def _filter_prefixes_to_used(prefixes: dict[str, str], used_iris: set[str]) -> d
     return {prefix: ns for prefix, ns in prefixes.items() if any(iri.startswith(ns) for iri in used_iris)}
 
 
-# Characters that may appear escaped in a Turtle PN_LOCAL via PN_LOCAL_ESC.
-_PN_LOCAL_ESC_UNESCAPE = re.compile(r"\\([_~.\-!$&'()*+,;=/?#@%])")
-
-
-def _turtle_protected_spans(text: str) -> list[tuple[int, int]]:
-    """Return half-open spans of the Turtle tokens a text rewrite must not enter.
-
-    Those are the string literals and the IRIREFs.  Turtle has four string
-    forms: single- and triple-quoted, each with either quote character, and a
-    backslash escapes the next character inside all of them.
-
-    IRIREFs are protected token boundaries. Production [18] permits ``'`` in
-    an IRIREF; a backslash is only a UCHAR escape and ``>`` ends the token.
-    """
-    spans: list[tuple[int, int]] = []
-    index = 0
-    length = len(text)
-    while index < length:
-        character = text[index]
-        if character == "<":
-            if text.startswith("<<", index):
-                # An RDF-star quoted-triple delimiter, not an IRIREF.  Step
-                # over it so the IRIREFs inside are recognized individually.
-                index += 2
-                continue
-            end = text.find(">", index + 1)
-            if end == -1:
-                # Unterminated: this is not Turtle.  Stop rather than guess,
-                # so nothing past it is treated as rewritable.
-                spans.append((index, length))
-                break
-            spans.append((index, end + 1))
-            index = end + 1
-            continue
-        if character not in ('"', "'"):
-            index += 1
-            continue
-        delimiter = character * 3 if text[index : index + 3] == character * 3 else character
-        start = index
-        index += len(delimiter)
-        while index < length:
-            if text[index] == "\\":
-                index += 2
-                continue
-            if text.startswith(delimiter, index):
-                index += len(delimiter)
-                break
-            index += 1
-        spans.append((start, index))
-    return spans
-
-
-def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> str:
-    """Replace CURIEs whose local part ends in ``\\.`` with full ``<IRI>`` form.
-
-    rdflib's notation3 parser rejects PN_LOCAL ending in an escaped dot
-    even though Turtle permits it (PN_LOCAL_ESC).  pyoxigraph emits this
-    form for IRIs ending in ``.`` (e.g. ``biolink:StrandEnum#.``).  We
-    rewrite each such CURIE to its expanded ``<IRI>`` form so the output
-    round-trips through rdflib.
-
-    The rewrite applies only outside string literals and IRIREFs. Literal text
-    remains RDF data, while other IRIs in the namespace retain their prefix.
-    """
-    if not prefixes:
-        return turtle_text
-
-    # Match: a prefix name, ':', a local part (no whitespace or token
-    # delimiters), ending in ``\.``, followed by whitespace.  Use a
-    # negative lookbehind to avoid matching inside ``<...>`` or word
-    # characters that would make this a substring of something else.
-    pattern = re.compile(
-        r"(?<![<\w])"
-        r"([A-Za-z_][\w.-]*?):"
-        r"([^\s,;()<>\"'\[\]]*?\\\.)"
-        r"(?=\s)"
-    )
-
-    def replace(match: re.Match[str]) -> str:
-        prefix = match.group(1)
-        local_escaped = match.group(2)
-        namespace = prefixes.get(prefix)
-        if namespace is None:
-            return match.group(0)
-        local = _PN_LOCAL_ESC_UNESCAPE.sub(r"\1", local_escaped)
-        return f"<{namespace}{local}>"
-
-    rewritten: list[str] = []
-    cursor = 0
-    for start, end in _turtle_protected_spans(turtle_text):
-        rewritten.append(pattern.sub(replace, turtle_text[cursor:start]))
-        rewritten.append(turtle_text[start:end])
-        cursor = end
-    rewritten.append(pattern.sub(replace, turtle_text[cursor:]))
-    return "".join(rewritten)
-
-
 def _is_safe_prefix_iri(iri: str) -> bool:
     """Check whether a namespace IRI can be used as a prefix declaration.
 
@@ -790,8 +684,9 @@ def canonicalize_rdf_graph(
 
     The graph is transferred to pyoxigraph via N-Triples, canonicalized
     with RDFC-1.0, sorted, and serialized back to the requested format.
-    Prefix bindings from the rdflib Graph are preserved in the output
-    for formats that support them (Turtle, TriG, N3, RDF/XML).
+    Prefix bindings are optional presentation for formats that support them
+    (Turtle, TriG, N3, RDF/XML). A binding is retained when its rendering
+    verifies; otherwise complete IRIs preserve the graph terms.
 
     The deterministic-output guarantee covers the format names this function
     maps itself: ``turtle``/``ttl``, ``nt``/``ntriples``/``n-triples``/``nt11``,
@@ -935,7 +830,7 @@ def canonicalize_rdf_graph(
     # pyoxigraph's serialize() stub is a single flat `-> bytes | None` with no
     # overload distinguishing output=None (returns bytes) from output=<stream>
     # (returns None). Neither call above passes output=, so this is always bytes.
-    def render(result_bytes: bytes, render_prefixes: dict[str, str] | None) -> str:
+    def render(result_bytes: bytes) -> str:
         result = result_bytes.decode("utf-8")
         if ox_format == ox.RdfFormat.RDF_XML:
             result = _finalize_rdf_xml(result)
@@ -946,28 +841,46 @@ def canonicalize_rdf_graph(
             # *expanded* JSON-LD, so there is no @context or @list array whose
             # order carries meaning, and the triples were already sorted above.
             result = deterministic_json(json.loads(result)) + "\n"
-        if ox_format in _TURTLE_FAMILY_FORMATS and render_prefixes:
-            result = _expand_trailing_dot_curies(result, render_prefixes)
         return result
 
     assert result_bytes is not None
-    result = render(result_bytes, used_prefixes)
+    result = render(result_bytes)
     if ox_format in _VERIFIED_FORMATS:
         try:
             _assert_round_trips(graph, result, output_format)
         except ValueError:
-            if used_base_iri is None:
+            if used_base_iri is not None:
+                logger.warning(
+                    "base IRI %r failed round-trip verification; serializing without it",
+                    used_base_iri,
+                )
+                retry_bytes = ox.serialize(
+                    sorted_triples,
+                    format=ox_format,
+                    prefixes=used_prefixes,
+                )
+                assert retry_bytes is not None
+                result = render(retry_bytes)
+                try:
+                    _assert_round_trips(graph, result, output_format)
+                except ValueError:
+                    if not used_prefixes:
+                        raise
+                    logger.warning(
+                        "prefix bindings failed round-trip verification; serializing without prefixes"
+                    )
+                    retry_bytes = ox.serialize(sorted_triples, format=ox_format)
+                    assert retry_bytes is not None
+                    result = render(retry_bytes)
+                    _assert_round_trips(graph, result, output_format)
+            elif used_prefixes:
+                logger.warning(
+                    "prefix bindings failed round-trip verification; serializing without prefixes"
+                )
+                retry_bytes = ox.serialize(sorted_triples, format=ox_format)
+                assert retry_bytes is not None
+                result = render(retry_bytes)
+                _assert_round_trips(graph, result, output_format)
+            else:
                 raise
-            logger.warning(
-                "base IRI %r failed round-trip verification; serializing without it",
-                used_base_iri,
-            )
-            retry_bytes = ox.serialize(
-                sorted_triples,
-                format=ox_format,
-                prefixes=used_prefixes,
-            )
-            assert retry_bytes is not None
-            result = render(retry_bytes, used_prefixes)
-            _assert_round_trips(graph, result, output_format)
     return _with_single_trailing_newline(result)
