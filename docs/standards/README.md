@@ -135,3 +135,104 @@ To update a reference:
 The catalog schema version changes when its structure changes. The checker
 keeps an explicit expected specification inventory; adding or removing a
 standard requires a reviewed change to that inventory as well as the catalog.
+
+## Requirement-to-test evidence
+
+[coverage.md](coverage.md) is the readable feature and requirement map;
+[requirements.json](requirements.json) is its declarative source. A row names
+a concrete, scoped behavior, its implementation owner and actual collected
+tests. It does not establish every possible input or every clause of a copied
+standard. The map is not a percentage of specification conformance and is not
+a complete cross-product of formats, terms and execution environments.
+
+The categories distinguish:
+
+- `normative`: a concrete behavior supported by at least one verified normative
+  clause. For example, RDF literal identity depends on lexical forms, not merely
+  equal interpreted values. A reference to an informative explanation alone
+  cannot qualify a row as normative.
+- `policy`: an API boundary, rendering choice or ordering algorithm owned by
+  this project. Referenced standard clauses constrain or explain the behavior;
+  they do not make the chosen algorithm a standard algorithm.
+- `extension`: an explicitly bounded behavior outside the copied standards'
+  core data model, such as Python mixed-key input or dependency-supported
+  directional literals. This does not enlarge the conformance profile.
+
+The source and installed suites validate the map during ordinary pytest runs.
+Only the standards integration fixture requests a full collect-only subprocess,
+lazily and once per test session. Collection imports test modules but never
+executes test bodies or recursively validates the catalog. A focused command
+outside `tests/standards/` runs only its selected tests.
+
+```bash
+python scripts/check_standards.py
+python scripts/check_requirements.py
+python -m pytest -q --package-under-test=source tests/standards
+```
+
+The requirement command requires the project's pytest development dependency
+and installed RDF dependencies, but no extra plugin and no network access. Its
+child uses the same Python executable, isolated mode, a temporary working
+directory, absolute test/config paths and an explicit package target. Inherited
+pytest options and plugin requests are removed. The package inventory is read
+only after the test harness selects and verifies the package origin.
+
+For a non-editable wheel environment, use its Python with the checkout's
+script and assets:
+
+```bash
+/path/to/wheel-env/bin/python -I /path/to/diffable-rdf/scripts/check_requirements.py \
+  --package-under-test=installed
+```
+
+The report counts collected test matches, not executed or passing tests. The
+full test run remains the execution gate. The two source-only package-harness
+tests remain collected but skip under installed mode, and the address-space
+measurement skips on platforms without resource limits. These outcomes are
+reported by pytest; a collected selector is not interpreted as a passing result.
+
+### Requirement catalog schema
+
+Schema version 1 has exactly three top-level fields: `schema_version`,
+`features` and `requirements`. Unknown fields, enum values and duplicate JSON
+keys fail validation. Collections use the following fields:
+
+| Object | Fields and invariants |
+| --- | --- |
+| Callable feature | Unique `id`, `kind: callable`, `description`, and `export`. Exports must equal the selected package's actual public callable exports. |
+| Format feature | Unique `id`, `kind: format`, `description`, `aliases`, and `backend`. The complete alias-to-backend mapping must equal the selected package's `_FORMAT_MAP`, including synonym membership. |
+| Requirement | Unique stable uppercase-hyphenated `id`, `description`, known `features`, `category`, `clauses`, nonempty `owners`, `status`, `reason`, `evidence`, and `not_applicable`. Every feature needs supported evidence. |
+| Clause | `reference`, exact `section`, `anchor`, and boolean `normative`. HTML entries must match the verified reference manifest's anchor, heading label and normative status. Numbered RFC text sections use a null anchor and must match a complete heading in the checked original text. |
+| Owner | `role`, `target`, and `path`. Roles are `local` contract/algorithm, `dependency`-owned syntax/canonicalization or binding data, and `boundary` validation. Targets are actual local callable entry points in the selected package; paths must match their source files. A dependency role identifies the local call site, not an independent implementation of that backend. |
+| Supported row | `status: supported`, null `reason`, and nonempty `evidence`. Each dimension appears either in evidence or in `not_applicable`, never both. |
+| Excluded row | `status: out-of-profile` and a nonempty `reason`. Both evidence maps must be empty; exclusions are visible profile boundaries, not silently passing tests. |
+
+The six evidence dimensions are `positive`, `negative`, `boundary`, `property`,
+`subprocess` and `end-to-end`. Evidence values are nonempty lists of pytest
+selectors. `not_applicable` values explain why the dimension is not separately
+claimed in that row: a no-argument snapshot has no invalid-input domain, for
+example, and serializer term fidelity does not require syntax-parser rejection
+tests. Shared process or composed-workflow obligations can be mapped in their
+own rows. Explicit examples do not imply an independent randomized property.
+
+A selector is either an exact collected nodeid, such as
+`tests/contracts/test_prefix_map.py::test_prefix_map_calls_return_independent_snapshots`,
+or a function-family selector matching that exact name followed by pytest's
+`[` parameter suffix. Module paths alone, globs, substring matches, nonexistent
+functions and empty evidence sets are rejected. A function with both a bare
+nodeid and parametrized children is ambiguous and fails validation. Renaming
+or removing a referenced test therefore fails the gate even if its file remains.
+
+When changing the feature or evidence set:
+
+1. Read the selected tests' assertions and keep each row no broader than the
+   concrete evidence. Identify local versus dependency ownership explicitly.
+2. Add verified anchors only from the same pinned original bytes. Distinguish
+   normative grammar and algorithms from informative examples. Original assets
+   and their hashes need not change when the selected anchor inventory grows.
+3. Update feature, requirement and evidence entries together; do not make a
+   supported behavior out of profile merely because a test fails.
+4. Run `python scripts/check_requirements.py --render` to explicitly update the
+   generated table, then run the default check. The default never rewrites it.
+5. Run the full source and exact installed-wheel suites. The source distribution
+   carries documents, scripts and tests; runtime wheels carry none of these assets.
