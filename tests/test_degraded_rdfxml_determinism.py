@@ -15,10 +15,12 @@ import os
 import subprocess
 import sys
 import textwrap
+from xml.etree import ElementTree
 
 import pytest
-from rdflib import Graph, Literal, Namespace, URIRef
+from rdflib import BNode, Graph, Literal, Namespace, URIRef
 from rdflib.compare import isomorphic
+from rdflib.namespace import RDF
 
 from diffable_rdf import canonicalize_rdf_graph
 
@@ -97,16 +99,26 @@ def test_sorting_preserves_the_graph() -> None:
 
 
 def test_a_literal_carriage_return_still_survives_the_sort() -> None:
-    """The sort re-serializes the tree, so the CR protection must outlast it."""
+    """A raw CR would be normalized to LF by any XML parser, changing the value.
+
+    rdflib writes it as ``&#13;`` itself, and the sort no longer disturbs that:
+    elements are moved as spans of rdflib's own text. The earlier sort parsed
+    and re-serialized the tree, which resolved the character reference back to
+    a raw CR -- so the ``&#xD;`` this test used to look for was this library
+    repairing damage its own sort had done.
+    """
     graph = Graph()
     graph.bind("ex", EX)
-    graph.add((EX.s, EX.p, Literal("a" + chr(13) + "b")))
+    value = Literal("a" + chr(13) + "b")
+    graph.add((EX.s, EX.p, value))
     graph.add((EX.t, EX.p, Literal("plain")))
     graph.add((URIRef("relative/thing"), EX.p, Literal("forces the degraded path")))
 
     result = canonicalize_rdf_graph(graph, "xml")
 
-    assert "&#xD;" in result
+    assert chr(13) not in result, "a raw CR does not survive XML newline normalization"
+    assert "&#13;" in result or "&#xD;" in result
+    assert Graph().parse(data=result, format="xml").value(EX.s, EX.p) == value
     reparsed = Graph().parse(data=result, format="xml", publicID=BASE)
     assert reparsed.value(EX.s, EX.p) == Literal("a" + chr(13) + "b")
 
@@ -121,8 +133,25 @@ def test_the_document_stays_well_formed_and_declared() -> None:
     assert result.count("<rdf:RDF") == 1
 
 
+def _property_order(result: str) -> list[list[str]]:
+    """The property element names of each rdf:Description, in document order."""
+    per_description: list[list[str]] = []
+    for element in ElementTree.fromstring(result):
+        per_description.append([child.tag for child in element])
+    return per_description
+
+
 def test_property_elements_within_a_subject_are_ordered_too() -> None:
-    """The first fix only sorted the top level, and that was not enough."""
+    """The first fix only sorted the top level, and that was not enough.
+
+    Checked per ``rdf:Description``: the properties of one subject are ordered
+    among themselves, and nothing says the last property of one subject sorts
+    before the first property of the next. The earlier version of this test
+    flattened every property element in the document into one list and required
+    *that* to be sorted -- which happened to hold only because it matched
+    nothing at all: it looked for lines starting ``<ex:``, and the sort was
+    rewriting the caller's ``ex:`` prefix to ``ns1:`` at the time.
+    """
     graph = Graph()
     graph.bind("ex", EX)
     for predicate in ("zeta", "alpha", "mu"):
@@ -130,12 +159,89 @@ def test_property_elements_within_a_subject_are_ordered_too() -> None:
     graph.add((URIRef("relative/thing"), EX.p, Literal("forces the degraded path")))
 
     result = canonicalize_rdf_graph(graph, "xml")
-    order = [
-        line.strip().split(">")[0].lstrip("<")
-        for line in result.splitlines()
-        if line.strip().startswith("<ex:")
-    ]
-    assert order == sorted(order), result
+
+    orders = _property_order(result)
+    assert orders, "no rdf:Description elements were found at all"
+    for order in orders:
+        assert order == sorted(order), result
+    assert ["<ex:alpha>", "<ex:mu>", "<ex:zeta>"] == [
+        line.strip().split(">")[0] + ">" for line in result.splitlines() if line.strip().startswith("<ex:")
+    ][:3], "the caller's prefix must be used, or this test measures nothing"
+
+
+def test_the_callers_prefix_names_survive_the_sort() -> None:
+    """The sort used to rename every prefix but rdf: to nsN:.
+
+    ``ElementTree`` discards the document's prefix mapping on parse and
+    re-derives it from a process-global registry on write, so ``beta:`` came
+    back as ``ns1:``. rdflib had written the caller's name correctly; the
+    determinism pass replaced it.
+    """
+    beta = Namespace("http://beta.example/")
+    graph = Graph(bind_namespaces="none")
+    graph.bind("beta", beta)
+    graph.add((URIRef("relative/thing"), beta.p, Literal("forces the degraded path")))
+    graph.add((beta.s, beta.q, Literal("v")))
+
+    result = canonicalize_rdf_graph(graph, "xml")
+
+    assert 'xmlns:beta="http://beta.example/"' in result, result
+    assert "<beta:q>" in result, result
+    assert "ns0:" not in result and "ns1:" not in result, result
+
+
+def test_the_output_does_not_depend_on_process_global_xml_state() -> None:
+    """Determinism means the bytes cannot depend on what else the process did.
+
+    ``ElementTree.register_namespace`` writes to a module-global registry that
+    the serializer consults, so an unrelated call anywhere in the process --
+    another library preparing its own XML output -- changed this library's
+    result for the same graph.
+    """
+    beta = Namespace("http://beta.example/")
+    graph = Graph(bind_namespaces="none")
+    graph.bind("beta", beta)
+    graph.add((URIRef("relative/thing"), beta.p, Literal("forces the degraded path")))
+    graph.add((beta.s, beta.q, Literal("v")))
+
+    before = canonicalize_rdf_graph(graph, "xml")
+    # There is no public unregister, so the map is snapshotted and restored;
+    # that is a concession to testing the global, not a pattern for the library.
+    saved = dict(ElementTree._namespace_map)  # noqa: SLF001
+    try:
+        ElementTree.register_namespace("zeta", "http://beta.example/")
+        after = canonicalize_rdf_graph(graph, "xml")
+    finally:
+        ElementTree._namespace_map.clear()  # noqa: SLF001
+        ElementTree._namespace_map.update(saved)  # noqa: SLF001
+
+    assert before == after, "an unrelated ElementTree registration changed the output"
+
+
+def test_properties_are_ordered_by_predicate_not_by_their_objects_label() -> None:
+    """Ordering by the object's blank-node label turned small edits into big diffs.
+
+    The old key led with any ``rdf:about``/``rdf:nodeID`` on the element, which
+    for a property element is its *object's* identity. A blank-node label
+    changes whenever the graph around it changes, so unrelated properties
+    reshuffled. The predicate is the stable thing to lead with, and it is what
+    the line-oriented formats sort by.
+    """
+    graph = Graph()
+    graph.bind("ex", EX)
+    graph.add((URIRef("relative/thing"), EX.p, Literal("forces the degraded path")))
+    for predicate in ("zeta", "alpha", "mu", "beta"):
+        graph.add((EX.s, EX[predicate], BNode()))
+
+    result = canonicalize_rdf_graph(graph, "xml")
+
+    subject_properties = next(
+        [child.tag for child in element]
+        for element in ElementTree.fromstring(result)
+        if element.attrib.get(f"{{{RDF}}}about") == str(EX.s)
+    )
+    assert subject_properties == sorted(subject_properties), result
+    assert len(subject_properties) == 4
 
 
 def test_the_normal_path_is_untouched() -> None:
