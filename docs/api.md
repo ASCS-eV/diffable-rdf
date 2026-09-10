@@ -197,8 +197,8 @@ appearance, not on fidelity; do not diff one against the other.
 
 **Verified formats.** Turtle, TriG, N3 and RDF/XML output is re-parsed and
 compared with the input before it is returned. N-Triples, N-Quads and JSON-LD
-have no compact list syntax and receive no text post-processing, so they are
-not re-checked. Neither is any output from the fallback below: a graph that
+do not use optional prefix declarations, so they are not re-checked. Neither
+is any output from the fallback below: a graph that
 pyoxigraph cannot parse has no RDFC-1.0 canonical form to compare against, so
 that path relies on emitting explicit structure rather than on checking it.
 
@@ -215,9 +215,13 @@ bindings whose namespace equals the base remain available for compact terms.
 Those formats are accepted only after RDFLib and pyoxigraph preserve direct and
 literal-datatype IRI terms.
 If that verification fails, the call logs a warning and makes one further
-rendering without the base IRI while retaining valid prefixes; the second
-rendering must also verify. If pyoxigraph rejects a base or prefix IRI, the call
-logs a warning and serializes without those rejected values.
+rendering without the base IRI while retaining valid prefixes. If that
+rendering also fails and prefixes remain, it makes a final rendering with
+neither base nor prefixes. Every rendering must verify before it is returned.
+This can replace compact names with complete IRIs for graphs whose backend
+prefix spelling is not accepted by both readers; ordinary valid bindings are
+retained. If pyoxigraph rejects a base or prefix IRI, the call logs a warning
+and serializes without those rejected values.
 
 **RDF/XML.** Literal carriage returns are written as `&#xD;` character
 references, so XML newline normalization cannot turn CR or CRLF into LF. On the
@@ -226,6 +230,8 @@ them are sorted, because rdflib's RDF/XML serializer orders both by its own
 graph traversal and RDF/XML gives neither order any meaning.
 RDF/XML base rendering is also verified; when it fails, one no-base rendering
 keeps the same XML namespace selection and must verify before it is returned.
+If that rendering fails while prefixes remain, the final rendering removes both
+the base and prefixes before the same verification.
 
 **On the fallback path, every name above works**, and two names for one format
 produce identical bytes. Two of them get there differently: TriG renders as
@@ -564,12 +570,14 @@ the temporary sibling is removed.
 
 Identical bytes across two runs assume the same inputs to the whole pipeline:
 
-- **The same prefix bindings.** Caller prefix names are kept and take
-  precedence; the remaining `ns1`, `ns2`, … names are allocated in IRI order,
-  independent of insertion order and hash seed. Bind a namespace differently
-  and the output changes accordingly.
+- **The same prefix bindings.** When a compact rendering verifies, caller
+  prefix names take precedence and remaining `ns1`, `ns2`, … names are
+  allocated in IRI order, independent of insertion order and hash seed. A
+  binding can instead render as complete IRIs when compact output does not
+  verify. Bind a namespace differently and the output can change accordingly.
 - **The same `graph.base`.** `deterministic_turtle` ignores it;
-  `canonicalize_rdf_graph` emits it.
+  `canonicalize_rdf_graph` uses it when the base rendering verifies and can
+  otherwise emit complete IRIs without it.
 - **The same `rdflib` and `pyoxigraph` versions.** RDFC-1.0 fixes which terms
   are equal, not how a serializer lays out a document.
 - **Literal terms as they reach this library.** The promise covers the terms in

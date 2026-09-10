@@ -19,9 +19,11 @@ about it.
   top-level quad terms only; direction-tagged literals remain supported.
 - Base rendering is accepted only after RDFLib and pyoxigraph preserve direct
   and literal-datatype IRI terms. A rendering that does not verify is emitted
-  once more without its base IRI, retaining valid prefixes. Turtle, TriG, and
-  N3 prefix bindings equal to the base remain available for compact terms;
-  RDF/XML keeps its XML namespace selection on the retry.
+  once more without its base IRI, retaining valid prefixes. If compact prefix
+  rendering still does not verify, a final rendering uses complete IRIs without
+  prefixes or a base. Ordinary valid bindings remain compact. Turtle, TriG,
+  and N3 prefix bindings equal to the base remain available for compact terms;
+  RDF/XML keeps its XML namespace selection on the no-base retry.
 - Degraded JSON-LD rejects a relative subject or object identifier exactly
   matching `@[A-Za-z]+`. JSON-LD reserves these strings, so returning them in an `@id`
   value can change or discard a graph term.

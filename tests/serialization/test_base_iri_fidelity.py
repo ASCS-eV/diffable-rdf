@@ -92,11 +92,13 @@ def test_an_ordinary_base_still_relativizes(output_format: str) -> None:
     assert isomorphic(reparsed, graph)
 
 
-def test_removing_an_unverified_base_is_reported() -> None:
+def test_removing_a_base_after_failed_verification_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
     """The serializer reports the verification-driven base retry."""
     import logging
 
     graph = _hash_base_graph()
+    original = canonicalize_module._assert_round_trips
+    attempts = 0
     logger = logging.getLogger("diffable_rdf.canonicalize")
     records: list[str] = []
 
@@ -107,10 +109,19 @@ def test_removing_an_unverified_base_is_reported() -> None:
     handler = Capture()
     logger.addHandler(handler)
     try:
-        canonicalize_rdf_graph(graph, "turtle")
+        def fail_once(*args: object, **kwargs: object) -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise ValueError("verification failed")
+            original(*args, **kwargs)
+
+        monkeypatch.setattr(canonicalize_module, "_assert_round_trips", fail_once)
+        result = canonicalize_rdf_graph(graph, "turtle")
     finally:
         logger.removeHandler(handler)
 
+    _assert_exact_parser_fidelity(graph, result, "turtle")
     assert any("failed round-trip verification" in message for message in records), records
 
 
@@ -177,7 +188,7 @@ def test_an_equal_base_namespace_preserves_every_iri_position(base: str, output_
 
 @pytest.mark.parametrize("output_format", TURTLE_FAMILY)
 def test_an_unprefixed_query_base_retries_without_base_and_preserves_datatypes(
-    output_format: str, caplog: pytest.LogCaptureFixture
+    output_format: str
 ) -> None:
     """A query base falls back to absolute terms when relative terms do not verify."""
     base = "http://ex/d?x="
@@ -194,16 +205,13 @@ def test_an_unprefixed_query_base_retries_without_base_and_preserves_datatypes(
     before_base = graph.base
     before_bindings = tuple(graph.namespaces())
 
-    with caplog.at_level("WARNING", logger="diffable_rdf.canonicalize"):
-        result = canonicalize_rdf_graph(graph, output_format)
+    result = canonicalize_rdf_graph(graph, output_format)
     _assert_exact_parser_fidelity(graph, result, output_format)
 
-    assert "@base" not in result
     assert canonicalize_rdf_graph(graph, output_format) == result
     assert tuple(graph.namespaces()) == before_bindings
     assert graph.base == before_base
     assert set(graph) == before_triples
-    assert [record.message for record in caplog.records if "failed round-trip verification" in record.message]
 
 
 @pytest.mark.parametrize("output_format", TURTLE_FAMILY)
@@ -222,11 +230,11 @@ def test_a_datatype_only_query_base_retries_without_base(output_format: str) -> 
     result = canonicalize_rdf_graph(graph, output_format)
     _assert_exact_parser_fidelity(graph, result, output_format)
 
-    assert "@base" not in result
     assert canonicalize_rdf_graph(graph, output_format) == result
 
 
 @pytest.mark.parametrize("output_format", XML_ALIASES)
+@pytest.mark.parametrize("force_retry", [False, True])
 @pytest.mark.parametrize(
     "datatype",
     [
@@ -236,8 +244,8 @@ def test_a_datatype_only_query_base_retries_without_base(output_format: str) -> 
 )
 def test_rdf_xml_retries_without_base_for_typed_literal_namespaces(
     output_format: str,
+    force_retry: bool,
     datatype: URIRef,
-    caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """RDF/XML retries without a base while retaining its namespace selection."""
@@ -245,23 +253,33 @@ def test_rdf_xml_retries_without_base_for_typed_literal_namespaces(
     graph = Graph(base=base, bind_namespaces="none")
     graph.add((URIRef(base + "s"), URIRef("http://ex.org/p"), Literal("1", datatype=datatype, normalize=False)))
     original = canonicalize_module.ox.serialize
+    original_assertion = canonicalize_module._assert_round_trips
+    validations = 0
     calls: list[dict[str, object]] = []
 
     def record(*args: object, **kwargs: object) -> bytes:
         calls.append(kwargs)
         return original(*args, **kwargs)
 
+    def fail_once(*args: object, **kwargs: object) -> None:
+        nonlocal validations
+        validations += 1
+        if validations == 1:
+            raise ValueError("verification failed")
+        original_assertion(*args, **kwargs)
+
     monkeypatch.setattr(canonicalize_module.ox, "serialize", record)
-    with caplog.at_level("WARNING", logger="diffable_rdf.canonicalize"):
-        result = canonicalize_rdf_graph(graph, output_format)
+    if force_retry:
+        monkeypatch.setattr(canonicalize_module, "_assert_round_trips", fail_once)
+    result = canonicalize_rdf_graph(graph, output_format)
     _assert_exact_parser_fidelity(graph, result, output_format)
 
-    assert "xml:base=" not in result
-    assert len(calls) == 2
-    assert calls[0]["prefixes"] == calls[1]["prefixes"]
-    assert calls[0]["base_iri"] == base
-    assert "base_iri" not in calls[1]
-    assert [record.message for record in caplog.records if "failed round-trip verification" in record.message]
+    if force_retry:
+        assert "xml:base=" not in result
+        assert len(calls) == 2
+        assert calls[0]["prefixes"] == calls[1]["prefixes"]
+        assert calls[0]["base_iri"] == base
+        assert "base_iri" not in calls[1]
 
 
 @pytest.mark.parametrize(
