@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
-
 import pyoxigraph as ox
 import pytest
 import rdflib
@@ -175,31 +173,6 @@ def test_deterministic_turtle_is_stable_after_lexical_preserving_reparse() -> No
     twice = deterministic_turtle(_rdflib_graph(parsed))
 
     assert twice == once
-
-
-def test_the_private_rdflib_api_the_serializer_depends_on_still_fits() -> None:
-    """``_LiteralPreservingTurtleSerializer.label`` calls a private rdflib method.
-
-    ``Literal._literal_n3`` is the only route to a quoted literal with a
-    prefix-abbreviated datatype: the public ``Literal.n3`` takes just a
-    namespace manager and applies the value shorthand this library must avoid.
-    The coupling is therefore deliberate, but nothing else would say so if
-    rdflib renamed the method or dropped a parameter -- the failure would
-    surface from inside a serializer during an ordinary call. This names it.
-
-    Signature *binding* rather than equality, so an unrelated parameter added
-    upstream does not fail spuriously.
-    """
-    method = getattr(Literal, "_literal_n3", None)
-    assert method is not None, (
-        "rdflib no longer provides Literal._literal_n3, which "
-        "_LiteralPreservingTurtleSerializer.label in src/diffable_rdf/turtle.py calls "
-        "to keep typed literals in quoted form. Find the current equivalent -- "
-        "Literal.n3 is not one, it applies the value shorthand."
-    )
-    inspect.signature(method).bind_partial(
-        Literal("x"), use_plain=False, qname_callback=lambda datatype: None
-    )
 
 
 def test_typed_literals_are_written_in_quoted_form() -> None:

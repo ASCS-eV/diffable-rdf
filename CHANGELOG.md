@@ -82,6 +82,18 @@ affected artifact, commit it once, and subsequent runs are stable again.
 
 ### Fixed
 
+- **`deterministic_turtle` no longer raises for a NaN or infinite number.**
+  Every `xsd:double`/`xsd:float` NaN, `INF` and `-INF` literal previously
+  failed with "this is a bug in diffable-rdf", because rdflib's literal
+  rendering re-spells `nan` to `NaN` and `inf` to `INF` regardless of the
+  option asking it not to, and the round-trip guard rightly refused a lexical
+  form the graph never held. Literals are now rendered directly from the term.
+  `canonicalize_rdf_graph` always handled these.
+- **A NaN beside an `xsd:decimal` no longer raises `decimal.InvalidOperation`.**
+  Objects are ordered by their complete RDF term spelling rather than through
+  rdflib's value-space comparison, which is neither total nor defined for that
+  pair. Output is unchanged for graphs that already worked.
+
 - Two triples differing only in a literal's lexical form are no longer merged
   into one.
 - A graph with a shared `rdf:List` tail no longer loses or duplicates cells on
