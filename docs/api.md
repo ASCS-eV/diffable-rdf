@@ -311,26 +311,40 @@ from the keyword rather than from the enclosing key.
 **Returns.** `str`. The input object is not modified.
 
 **Raises.** `TypeError` from `json.dumps` for a value it cannot encode, such as
-a `set`.
+a `set`. `ValueError` if two keys of one dict encode to the same JSON name (see
+*Prefer string keys* below).
 
 **Arrays whose order carries meaning are kept.** `@list` values, `@json`
 literal payloads, and terms declared with `@container: @list` or
 `@type: @json` in a local `@context` are recognized, including keyword aliases,
 ordered context arrays, inheritance by nested objects, and a `null` reset.
+Key order inside a `@context` object carries no meaning, so a definition may
+name an alias declared after it: Create Term Definition (JSON-LD 1.1 API
+§4.2.2) keeps a `defined` map and resolves a referenced term recursively.
 Remote contexts, `@import`, scoped contexts and definitions whose ordering
 cannot be settled locally are never fetched and mark the value unknown; from
 there every descendant array is left alone, which also covers a `@context: null`
 that is itself data inside an unrecognized `@json` property.
 
-Protection otherwise reaches the immediate array only: with `{"keep": …}`
-protected, `{"keep": [{"inner": ["z", "a"]}]}` keeps the outer array's order
-and still sorts `inner`.
+An array nested directly inside a protected array keeps its order too, since
+it expands to a nested list rather than to a fresh unordered value. Protection
+otherwise reaches the immediate array only, and a dict is where it stops: with
+`{"keep": …}` protected, `{"keep": [{"inner": ["z", "a"]}]}` keeps the outer
+array's order and still sorts `inner`, because that dict begins a fresh node
+object.
 
 **Prefer string keys.** `json.dumps` coerces `int`, `float`, `bool` and `None`
 keys to strings, and this function sorts on that coerced name so mixed key
-types do not raise. Two distinct Python keys that coerce to the same name —
-`1` and `"1"` — produce an object with that name twice, exactly as
-`json.dumps` does on its own. Tuples are another encoder extension: they are
+types do not raise. It coerces the way the encoder does, so `float("inf")` is
+`Infinity` and a `float`/`int` subclass is written as its number rather than
+through its `__str__`.
+
+Two distinct Python keys that coerce to the same name — `1` and `"1"`, or two
+distinct `float("nan")` objects — are refused with `ValueError`. Such a dict
+has two entries but would be written as one object carrying that name twice:
+`json.loads` keeps only the last, so the text could not be read back, and the
+two items tie under the sort, so equal data would not render as equal text.
+Use string keys. Tuples are another encoder extension: they are
 written as arrays but are not recursed into, so their contents keep the order
 you built them in.
 

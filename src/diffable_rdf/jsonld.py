@@ -106,6 +106,28 @@ def _apply_local_context(value: object, active: _LocalContext) -> _LocalContext:
     if any(key in {"@import", "@propagate", "@protected"} for key in value):
         result = _with_unknown(result)
 
+    # Key order inside a `@context` object is not meaningful: the JSON-LD 1.1
+    # API's Create Term Definition (section 4.2.2) carries a `defined` map and
+    # resolves a referenced term recursively, so an alias may be declared after
+    # the term that uses it. Folding the object once, front to back, missed
+    # those and left an ordered `@list` or `@json` value looking unordered --
+    # which then got sorted, changing the RDF. Repeating the pass until nothing
+    # new is learned reproduces the `defined`-map behaviour without writing a
+    # context processor. Bounded by the number of terms, since each pass either
+    # learns something or is the last.
+    for _ in range(len(value) + 1):
+        before = (dict(result.keyword_aliases), result.json_terms, result.list_terms, result.unknown)
+        result = _apply_term_definitions(value, result)
+        after = (dict(result.keyword_aliases), result.json_terms, result.list_terms, result.unknown)
+        if before == after:
+            break
+
+    return result
+
+
+def _apply_term_definitions(value: dict, active: _LocalContext) -> _LocalContext:
+    """One pass over a context object's term definitions."""
+    result = active
     for raw_term, definition in value.items():
         if not isinstance(raw_term, str) or raw_term.startswith("@"):
             continue
@@ -176,7 +198,46 @@ def _json_key(key: object) -> str:
         return "true"
     if key is False:
         return "false"
+    if isinstance(key, float):
+        # json.encoder uses floatstr, not str: NaN and the infinities get these
+        # spellings, and every other float its repr.
+        if key != key:
+            return "NaN"
+        if key == float("inf"):
+            return "Infinity"
+        if key == float("-inf"):
+            return "-Infinity"
+        return float.__repr__(key)
+    if isinstance(key, int):
+        return int.__repr__(key)
     return str(key)
+
+
+def _sorted_items(value: dict) -> list:
+    """Order a dict's items by the name ``json.dumps`` will write.
+
+    Refuses two keys that encode to the same name, as ``{1: "a", "1": "b"}``
+    and ``{float("nan"): "a", float("nan"): "b"}`` do. Such a dict has two
+    entries but serializes to one object carrying the same name twice, which
+    RFC 8259 section 4 leaves to unpredictable interpretation; ``json.loads``
+    keeps only the last, so the text cannot be read back and rendering is not
+    idempotent. It also breaks this function's contract that equal data
+    serializes to equal text: the colliding items compare equal under the
+    sort key, so a stable sort leaves their order to insertion order, and the
+    equal dicts ``{1: "a", "1": "b"}`` and ``{"1": "b", 1: "a"}`` render
+    differently. Refusing is the only answer that neither drops an entry nor
+    invents one.
+    """
+    seen: dict[str, object] = {}
+    for key in value:
+        name = _json_key(key)
+        if name in seen:
+            raise ValueError(
+                f"keys {seen[name]!r} and {key!r} both encode to the JSON name "
+                f"{name!r}, which one object cannot carry twice. Use string keys."
+            )
+        seen[name] = key
+    return sorted(value.items(), key=lambda item: _json_key(item[0]))
 
 
 def deterministic_json(
@@ -196,8 +257,11 @@ def deterministic_json(
     Arrays whose order carries JSON-LD meaning are left alone: ``@list``
     values, ``@json`` literal payloads, and terms declared with
     ``@container: @list`` or ``@type: @json`` in a local ``@context``,
-    including keyword aliases, ordered context arrays, inheritance by nested
-    objects, and a ``null`` reset. Remote contexts, ``@import``, scoped
+    including keyword aliases (in any order within the ``@context`` object,
+    since its key order carries no meaning), arrays nested directly inside
+    such an array, ordered context arrays, inheritance by nested objects, and
+    a ``null`` reset. Protection stops at a dict, which begins a fresh node
+    object whose own arrays sort again. Remote contexts, ``@import``, scoped
     contexts and definitions whose ordering cannot be settled locally are
     never fetched; from such a value on, every descendant array is retained,
     which also covers a ``@context: null`` that is itself data inside an
@@ -213,6 +277,10 @@ def deterministic_json(
         like any other.
     :returns: Deterministic JSON string.
     :raises TypeError: From ``json.dumps``, for a value it cannot encode.
+    :raises ValueError: If two keys of one dict encode to the same JSON name,
+        as ``{1: "a", "1": "b"}`` does. One object cannot carry a name twice:
+        ``json.loads`` would keep only the last entry, and the two items tie
+        under the sort, so equal data would not render as equal text.
     """
     skip = preserve_list_order_keys if preserve_list_order_keys is not None else _JSONLD_ORDERED_KEYS
 
@@ -269,11 +337,24 @@ def deterministic_json(
                         or k in json_value_keys
                     ),
                 )
-                for k, v in sorted(value.items(), key=lambda kv: _json_key(kv[0]))
+                for k, v in _sorted_items(value)
             }
         if isinstance(value, list):
+            # An array nested directly inside an ordered array is ordered
+            # too: it expands to a nested list, not to a fresh unordered
+            # value, so its order reaches the RDF as list structure just the
+            # same (``@list`` is *the* ordered container, JSON-LD 1.1 §4.3.1).
+            # Carry the protection into array items only -- a dict starts a
+            # fresh node object, which is the documented point where sorting
+            # resumes.
             sorted_items = [
-                _deep_sort(item, context, preserve_descendant_lists=preserve_descendant_lists) for item in value
+                _deep_sort(
+                    item,
+                    context,
+                    preserve_current_list=preserve_current_list and isinstance(item, list),
+                    preserve_descendant_lists=preserve_descendant_lists,
+                )
+                for item in value
             ]
             if preserve_current_list or preserve_descendant_lists or context.unknown:
                 return sorted_items

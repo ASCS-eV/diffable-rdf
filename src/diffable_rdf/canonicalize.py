@@ -54,7 +54,7 @@ from rdflib.plugin import PluginException
 from rdflib import Graph
 from rdflib.compare import to_canonical_graph
 
-from .expanded_jsonld import _ABSOLUTE_IRI, serialize_expanded_jsonld
+from .expanded_jsonld import _is_absolute_iri, serialize_expanded_jsonld
 from .graph_input import _require_single_graph
 from .jsonld import deterministic_json
 from .namespaces import prepare_namespaces
@@ -280,22 +280,22 @@ def _first_term_n_triples_cannot_write(
     """
     for subject, predicate, obj in graph:
         if isinstance(subject, rdflib.URIRef):
-            if not _ABSOLUTE_IRI.match(str(subject)):
+            if not _is_absolute_iri(str(subject)):
                 return "subject", subject
         elif not isinstance(subject, rdflib.BNode):
             return "subject", subject
 
         if not isinstance(predicate, rdflib.URIRef):
             return "predicate", predicate
-        if not _ABSOLUTE_IRI.match(str(predicate)):
+        if not _is_absolute_iri(str(predicate)):
             return "predicate", predicate
 
         if isinstance(obj, rdflib.URIRef):
-            if not _ABSOLUTE_IRI.match(str(obj)):
+            if not _is_absolute_iri(str(obj)):
                 return "object", obj
         elif isinstance(obj, rdflib.Literal):
             datatype = obj.datatype
-            if datatype is not None and not _ABSOLUTE_IRI.match(str(datatype)):
+            if datatype is not None and not _is_absolute_iri(str(datatype)):
                 return "literal datatype", datatype
         elif not isinstance(obj, rdflib.BNode):
             return "object", obj

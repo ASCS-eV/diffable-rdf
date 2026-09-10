@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 
+import pyoxigraph as ox
 import rdflib
 from rdflib import BNode, Literal, URIRef
 from rdflib.term import Node
@@ -21,6 +22,24 @@ from rdflib.term import Node
 from .jsonld import deterministic_json
 
 _ABSOLUTE_IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
+def _is_absolute_iri(value: str) -> bool:
+    """Whether ``value`` is a usable absolute IRI.
+
+    Delegated to pyoxigraph, which already implements the check correctly, in
+    place of the scheme-prefix regex this used to rely on: that accepted a
+    space, a brace and a bad percent-escape, so an invalid IRI reached the
+    output and made pyoxigraph reject the whole document on the way back in.
+    rdflib parses such a document leniently, which is why nothing noticed.
+    """
+    if not _ABSOLUTE_IRI.match(value):
+        return False
+    try:
+        ox.NamedNode(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _unsupported(position: str, term: Node) -> ValueError:
@@ -37,7 +56,7 @@ def _iri_identifier(term: URIRef, position: str, *, require_absolute: bool) -> s
             "degraded JSON-LD interoperable RDF subset does not accept a URIRef beginning with '_:' "
             f"in {position} position: {value!r}"
         )
-    if require_absolute and not _ABSOLUTE_IRI.match(value):
+    if require_absolute and not _is_absolute_iri(value):
         raise ValueError(
             f"degraded JSON-LD requires an absolute IRI in {position} "
             f"position: {value!r}"
