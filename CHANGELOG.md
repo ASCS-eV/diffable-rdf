@@ -10,12 +10,31 @@ likely to matter to you: it shows up as one large diff the next time you
 regenerate a committed artifact. Every such change is listed with what to do
 about it.
 
-## [Unreleased]
+## [0.3.0] - 2026-09-10
+
+Two kinds of change here, and the difference matters when you upgrade.
+
+**Calls that used to return now raise.** These are breaking, and each replaces
+silent data loss with an error naming the term and a format that can carry it:
+
+- `Dataset` and `ConjunctiveGraph` arguments raise `TypeError` at both entry
+  points, instead of one arbitrary graph being serialized as if it were the
+  whole input.
+- `nt` and `nquads` raise `ValueError` for a graph holding a term N-Triples
+  cannot write, instead of returning text no parser will read.
+- `xml` raises `ValueError` for a character XML 1.0 cannot represent, and
+  degraded JSON-LD raises for a generalized term the interoperable subset
+  cannot express.
+- `deterministic_json` raises `ValueError` for two dict keys that encode to the
+  same JSON name.
+- Output that fails its own round-trip check raises rather than being returned.
+
+If your input is standard RDF and your keys are strings, none of these fire.
+
+**Output bytes change** on the paths below. Each is a one-time diff: regenerate
+the affected artifact, commit it once, and subsequent runs are stable again.
 
 ### Changed
-
-Output bytes change on the paths below. Each is a one-time diff: regenerate the
-affected artifact, commit it once, and subsequent runs are stable again.
 
 - **Typed literals in `deterministic_turtle` keep their exact lexical form.**
   An `xsd:integer` is now written `"42"^^xsd:integer` rather than `42`, and
@@ -45,6 +64,16 @@ affected artifact, commit it once, and subsequent runs are stable again.
   payloads, and terms a local context declares ordered — and sorts lists whose
   dictionaries have mixed key types, which previously left the whole enclosing
   list unsorted.
+- **`json-ld` is produced by pyoxigraph and re-indented, not delegated to
+  rdflib.** In 0.2.0 the name was not mapped, so it fell through to rdflib's
+  JSON-LD serializer with a warning and carried no determinism guarantee. It is
+  now a first-class format: pyoxigraph writes expanded JSON-LD from the
+  canonicalized dataset and `deterministic_json` renders it line by line. The
+  bytes are entirely different, and the output is now stable across processes.
+- **Every output ends with exactly one trailing newline.** 0.2.0 passed through
+  whatever the serializer produced — sometimes none, sometimes two — so a
+  committed artifact could differ from the same graph written by another path,
+  and POSIX text tools disagreed about the last line.
 - **`deterministic_json` now sorts `@graph` and `@set` arrays.** JSON-LD leaves
   both unordered; protecting them defeated the determinism the function is for.
   An ordered construct nested inside them still keeps its order.
