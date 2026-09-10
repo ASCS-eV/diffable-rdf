@@ -26,9 +26,6 @@ parser will read; the Turtle family, RDF/XML and JSON-LD carry it fine.
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
 import textwrap
 from urllib.parse import urljoin
 
@@ -245,6 +242,7 @@ def test_the_refusal_names_the_position_of_the_offending_term() -> None:
 
 @pytest.mark.parametrize("output_format", ["turtle", "trig", "n3", "json-ld"])
 def test_degraded_formats_that_carry_the_graph_are_stable_across_processes(
+    python_runner,
     output_format: str,
 ) -> None:
     """The stable carrying formats produce identical process output."""
@@ -268,10 +266,12 @@ def test_degraded_formats_that_carry_the_graph_are_stable_across_processes(
         """
     )
     outputs = {
-        subprocess.run(
-            [sys.executable, "-c", script, output_format, str(seed)],
+        python_runner(
+            script,
+            output_format,
+            str(seed),
             capture_output=True, text=True, check=True,
-            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+            env={"PYTHONHASHSEED": str(seed)},
         ).stdout
         for seed in (1, 7, 23, 101)
     }

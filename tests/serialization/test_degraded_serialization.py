@@ -7,8 +7,6 @@ serializers retain deterministic output and RDF term identity for those inputs.
 
 from __future__ import annotations
 
-import subprocess
-import sys
 import textwrap
 
 import pytest
@@ -31,7 +29,7 @@ def _graph_with_named_bnode_and_literal_predicate() -> Graph:
     return graph
 
 
-def _run_fallback_serializer_in_subprocess(call: str) -> str:
+def _run_fallback_serializer_in_subprocess(python_runner, call: str) -> str:
     """Run a fallback serializer in a fresh interpreter."""
     script = textwrap.dedent(f"""
         import warnings
@@ -49,8 +47,8 @@ def _run_fallback_serializer_in_subprocess(call: str) -> str:
         graph.addN([(EX.a, Literal("literal-predicate"), Literal("x"), graph)])
         print({call})
     """)
-    result = subprocess.run(
-        [sys.executable, "-c", script],
+    result = python_runner(
+        script,
         capture_output=True,
         text=True,
         check=True,
@@ -65,10 +63,10 @@ def _run_fallback_serializer_in_subprocess(call: str) -> str:
         "deterministic_turtle(graph)",
     ],
 )
-def test_fallback_path_is_reproducible_across_processes(call: str) -> None:
+def test_fallback_path_is_reproducible_across_processes(python_runner, call: str) -> None:
     """Fallback serializers emit identical bytes in separate interpreters."""
-    first = _run_fallback_serializer_in_subprocess(call)
-    second = _run_fallback_serializer_in_subprocess(call)
+    first = _run_fallback_serializer_in_subprocess(python_runner, call)
+    second = _run_fallback_serializer_in_subprocess(python_runner, call)
 
     assert first == second
     assert "_:N" not in first

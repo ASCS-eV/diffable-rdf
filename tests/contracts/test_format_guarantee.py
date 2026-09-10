@@ -14,9 +14,6 @@ offered, and the warning where it is not.
 from __future__ import annotations
 
 import logging
-import os
-import subprocess
-import sys
 import textwrap
 
 import pytest
@@ -30,7 +27,7 @@ EX = Namespace("http://example.org/")
 
 
 @pytest.mark.parametrize("output_format", ["turtle", "json-ld", "xml", "nt", "nquads", "trig", "n3"])
-def test_canonicalize_rdf_graph_is_deterministic_across_processes(output_format: str) -> None:
+def test_canonicalize_rdf_graph_is_deterministic_across_processes(python_runner, output_format: str) -> None:
     """Every supported format is byte-identical across interpreters."""
     script = textwrap.dedent(
         """
@@ -48,7 +45,7 @@ def test_canonicalize_rdf_graph_is_deterministic_across_processes(output_format:
         """
     )
     outputs = {
-        subprocess.run([sys.executable, "-c", script, output_format], capture_output=True, text=True, check=True).stdout
+        python_runner(script, output_format, capture_output=True, text=True, check=True).stdout
         for _ in range(3)
     }
     assert len(outputs) == 1, f"{output_format} output differs between interpreter processes"
@@ -85,7 +82,7 @@ graph.add((EX.second, EX.items, cells[3]))
 """
 
 
-def _outputs_across_processes(output_format: str) -> set[str]:
+def _outputs_across_processes(python_runner, output_format: str) -> set[str]:
     """Serialize the same graph in fresh interpreters, one per hash seed."""
     # BUILD_GRAPH is already unindented, so dedent the appended block on its
     # own -- dedenting the concatenation finds no common prefix and leaves the
@@ -99,25 +96,26 @@ def _outputs_across_processes(output_format: str) -> set[str]:
     )
     results = set()
     for seed in HASH_SEEDS:
-        completed = subprocess.run(
-            [sys.executable, "-c", script, output_format],
+        completed = python_runner(
+            script,
+            output_format,
             capture_output=True,
             text=True,
             check=True,
-            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+            env={"PYTHONHASHSEED": str(seed)},
         )
         results.add(completed.stdout)
     return results
 
 
 @pytest.mark.parametrize("output_format", sorted(_FORMAT_MAP))
-def test_every_mapped_format_is_byte_identical_across_processes(output_format: str) -> None:
+def test_every_mapped_format_is_byte_identical_across_processes(python_runner, output_format: str) -> None:
     """The guarantee, for every name the library maps itself.
 
     Parametrized over ``_FORMAT_MAP`` rather than a hand-written list, so a
     format added later inherits the requirement instead of quietly escaping it.
     """
-    outputs = _outputs_across_processes(output_format)
+    outputs = _outputs_across_processes(python_runner, output_format)
     assert len(outputs) == 1, (
         f"{output_format} is mapped by this library and must be byte-identical across "
         f"processes, but produced {len(outputs)} distinct outputs"

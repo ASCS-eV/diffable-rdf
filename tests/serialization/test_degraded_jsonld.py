@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
-import sys
 import textwrap
 from io import BytesIO
 from urllib.parse import urljoin
@@ -24,7 +21,7 @@ BASE = "https://base.example/root/"
 JSONLD_ALIASES = ["json-ld", "jsonld", "application/ld+json"]
 
 
-def test_degraded_json_ld_is_reproducible_across_processes() -> None:
+def test_degraded_json_ld_is_reproducible_across_processes(python_runner) -> None:
     """Relative-node JSON-LD is stable across graph order and hash seeds."""
     script = textwrap.dedent(
         """
@@ -50,12 +47,13 @@ def test_degraded_json_ld_is_reproducible_across_processes() -> None:
         """
     )
     outputs = {
-        subprocess.run(
-            [sys.executable, "-c", script, str(seed)],
+        python_runner(
+            script,
+            str(seed),
             capture_output=True,
             text=True,
             check=True,
-            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+            env={"PYTHONHASHSEED": str(seed)},
         ).stdout
         for seed in (1, 7, 23, 101, 997)
     }

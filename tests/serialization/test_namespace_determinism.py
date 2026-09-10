@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 import re
-import subprocess
-import sys
 import textwrap
 
 import pyoxigraph as ox
@@ -63,17 +59,20 @@ PROCESS_SCRIPT = textwrap.dedent(
 )
 
 
-def _process_outputs(mode: str, output_format: str | None = None) -> list[str]:
-    source = str(Path(__file__).resolve().parents[2] / "src")
+def _process_outputs(python_runner, mode: str, output_format: str | None = None) -> list[str]:
     outputs = []
     for seed in (1, 7, 31, 509):
-        env = os.environ.copy()
-        env["PYTHONHASHSEED"] = str(seed)
-        env["PYTHONPATH"] = source
-        command = [sys.executable, "-c", PROCESS_SCRIPT, str(seed), mode]
+        arguments = [str(seed), mode]
         if output_format is not None:
-            command.append(output_format)
-        completed = subprocess.run(command, env=env, capture_output=True, text=True, check=True)
+            arguments.append(output_format)
+        completed = python_runner(
+            PROCESS_SCRIPT,
+            *arguments,
+            env={"PYTHONHASHSEED": str(seed)},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         outputs.append(completed.stdout)
     return outputs
 
@@ -88,8 +87,8 @@ def _process_outputs(mode: str, output_format: str | None = None) -> list[str]:
         ("relative-predicates", "n3"),
     ],
 )
-def test_namespace_allocation_is_stable_across_processes(mode: str, output_format: str | None) -> None:
-    outputs = _process_outputs(mode, output_format)
+def test_namespace_allocation_is_stable_across_processes(python_runner, mode: str, output_format: str | None) -> None:
+    outputs = _process_outputs(python_runner, mode, output_format)
     assert len(set(outputs)) == 1
     if mode == "normal":
         assert '@prefix ns1: <http://alpha.example/vocab/> .' in outputs[0]
