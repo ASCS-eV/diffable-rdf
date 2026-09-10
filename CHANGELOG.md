@@ -98,6 +98,20 @@ affected artifact, commit it once, and subsequent runs are stable again.
 - Lint, type-check and coverage gates; a job that resolves the declared
   dependency floors and runs the suite against them; a check that the committed
   lockfile is not stale.
+- **Python 3.14** in the tested matrix, and the suite run on Windows and macOS
+  as well as Linux — the package claims `Operating System :: OS Independent`,
+  which nothing was checking.
+- **The built wheel is installed and tested**, rather than only built and
+  metadata-checked. The suite runs against the installed package with the
+  `src/` import path cleared, so a module or data file missing from the wheel
+  fails here instead of at an install; `py.typed` is checked explicitly,
+  because without it a type checker silently ignores every annotation shipped.
+- **A scheduled job against the newest permitted dependency versions.** The
+  main matrix pins `uv.lock` and the floors job pins the declared minimums, so
+  neither notices a new rdflib or pyoxigraph release. This library's output is
+  coupled to both, so such a release is now found deliberately, daily, without
+  letting an upstream break block unrelated pull requests.
+- The coverage number is a **gate** (`--cov-fail-under`), not a report.
 - Tests that fail when a worked-around dependency defect is fixed upstream, so
   the workaround gets retired rather than carried forever.
 

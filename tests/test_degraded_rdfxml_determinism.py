@@ -258,3 +258,32 @@ def test_the_normal_path_is_untouched() -> None:
     # not run on this path.
     assert "rdf:Description" in result
     assert isomorphic(Graph().parse(data=result, format="xml"), graph)
+
+
+def test_a_comment_or_processing_instruction_is_not_mistaken_for_an_element() -> None:
+    """The scanner has to skip markup that is not an element.
+
+    rdflib writes neither into its RDF/XML, so this exercises the scanner
+    directly rather than through a serializer that cannot produce the input.
+    """
+    from diffable_rdf.canonicalize import _sort_rdf_xml_descriptions
+
+    document = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        "<!-- a leading comment -->\n"
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:ex="http://ex/">\n'
+        "  <!-- between the root and its children -->\n"
+        '  <rdf:Description rdf:about="http://ex/z"><ex:p>z</ex:p></rdf:Description>\n'
+        '  <rdf:Description rdf:about="http://ex/a"><ex:p>a</ex:p></rdf:Description>\n'
+        "</rdf:RDF>\n"
+    )
+
+    result = _sort_rdf_xml_descriptions(document)
+
+    assert result.index("http://ex/a") < result.index("http://ex/z"), result
+    assert "<!-- a leading comment -->" in result
+    assert "<!-- between the root and its children -->" in result
+    assert [element.attrib[f"{{{RDF}}}about"] for element in ElementTree.fromstring(result)] == [
+        "http://ex/a",
+        "http://ex/z",
+    ]
