@@ -14,6 +14,9 @@ about it.
 
 ### Changed
 
+- `wl_blank_node_labels` and `wl_relabel_quads` now reject embedded
+  `pyoxigraph.Triple` terms with `ValueError`. They operate on supported
+  top-level quad terms only; direction-tagged literals remain supported.
 - Degraded JSON-LD rejects a relative subject or object identifier exactly
   matching `@[A-Za-z]+`. JSON-LD reserves these strings, so returning them in an `@id`
   value can change or discard a graph term.
