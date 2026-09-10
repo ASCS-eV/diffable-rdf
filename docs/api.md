@@ -279,7 +279,7 @@ for output_format in ("turtle", "nt", "xml", "json-ld"):
 def deterministic_json(
     obj: object,
     indent: int = 3,
-    preserve_list_order_keys: frozenset[str] | None = None,
+    preserve_list_order_keys: AbstractSet[str] | None = None,
 ) -> str
 ```
 
@@ -299,7 +299,8 @@ a JSON canonicalization scheme, and not a JSON-LD processor.
   order. Defaults to `{"@context", "@list", "imports"}`. A set you pass
   **replaces** that default, so `imports` loses its protection unless you
   include it. The JSON-LD keyword protections below apply either way,
-  including under an empty set.
+  including under an empty set. Any set is accepted — a `set`, a `frozenset`,
+  or a view such as `mapping.keys()`.
 
 `@graph` and `@set` are **not** protected, and their arrays sort like any
 other. JSON-LD arrays carry no order unless a container says they do, and

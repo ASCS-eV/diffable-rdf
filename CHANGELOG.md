@@ -194,6 +194,16 @@ affected artifact, commit it once, and subsequent runs are stable again.
   guarantee the format carries. Nothing is re-serialized now, and the sort key
   is built from the parsed element rather than from serialized text, so no
   prefix name enters the ordering either.
+- **`deterministic_turtle`'s annotations resolve at runtime.** Its `graph`
+  parameter was annotated with a name imported only under `TYPE_CHECKING`, so
+  `typing.get_type_hints` raised `NameError: name 'RdfGraph' is not defined` --
+  breaking Pydantic, FastAPI, `typer`, `beartype` and documentation generators,
+  all of which evaluate annotations at runtime. rdflib is a required
+  dependency, so there was nothing to defer.
+- **`preserve_list_order_keys` accepts any set.** It was annotated
+  `frozenset[str] | None`, so a type checker rejected the `{"custom"}` literal
+  the documentation invites; callers had to add a cast to pass what the docs
+  told them to.
 - Two triples differing only in a literal's lexical form are no longer merged
   into one.
 - A graph with a shared `rdf:List` tail no longer loses or duplicates cells on

@@ -7,16 +7,13 @@ Weisfeiler-Lehman blank-node hashing -> idiomatic rdflib re-serialization.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from rdflib import Graph as RdfGraph
-    from rdflib.term import Node
+import pyoxigraph
+from rdflib import BNode, Graph, Literal, URIRef
+from rdflib.plugins.serializers.turtle import TurtleSerializer
+from rdflib.term import Node
 
 logger = logging.getLogger(__name__)
-
-
-from rdflib.plugins.serializers.turtle import TurtleSerializer  # noqa: E402
 
 
 # The WL labelling primitive lives in diffable_rdf.wl so that tools which
@@ -79,10 +76,8 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
         return ordered
 
     @staticmethod
-    def _object_sort_key(node: "Node") -> tuple:
+    def _object_sort_key(node: Node) -> tuple:
         """A total order over objects that never consults the value space."""
-        from rdflib import BNode, Literal, URIRef
-
         # Rank kinds in the order rdflib's own comparator produces -- blank
         # nodes, then IRIs, then literals -- so replacing the comparator does
         # not reorder anybody's existing output. Within a kind the complete
@@ -95,7 +90,7 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
             return (2, str(node), node.language or "", str(node.datatype or ""))
         return (3, str(node), "", "")
 
-    def label(self, node: "Node", position: int) -> str:
+    def label(self, node: Node, position: int) -> str:
         from rdflib import Literal
 
         if isinstance(node, Literal):
@@ -146,18 +141,18 @@ class _NoCollectionTurtleSerializer(_LiteralPreservingTurtleSerializer):
     need it.
     """
 
-    def isValidList(self, l_: "Node") -> bool:
+    def isValidList(self, l_: Node) -> bool:
         return False
 
 
-def _canonical_dataset_form(dataset, pyoxigraph) -> str:
+def _canonical_dataset_form(dataset: pyoxigraph.Dataset) -> str:
     dataset.canonicalize(pyoxigraph.CanonicalizationAlgorithm.RDFC_1_0)
     return "\n".join(
         sorted(str(pyoxigraph.Triple(quad.subject, quad.predicate, quad.object)) for quad in dataset)
     )
 
 
-def _rdfc_canonical_form(graph: "RdfGraph", pyoxigraph) -> str | None:
+def _rdfc_canonical_form(graph: Graph) -> str | None:
     """Return the RDFC-1.0 canonical N-Triples of ``graph``, as sorted lines.
 
     RDFC-1.0 is a canonical form: two graphs are isomorphic exactly when
@@ -170,9 +165,6 @@ def _rdfc_canonical_form(graph: "RdfGraph", pyoxigraph) -> str | None:
     Returns ``None`` when the graph cannot be represented in pyoxigraph at
     all (non-standard RDF such as literal predicates).  Callers treat that
     as "cannot be compared", never as "equal".
-
-    ``pyoxigraph`` is passed in because :func:`deterministic_turtle` keeps the
-    required extension's import local to the public operation that uses it.
     """
     try:
         dataset = pyoxigraph.Dataset(
@@ -180,16 +172,16 @@ def _rdfc_canonical_form(graph: "RdfGraph", pyoxigraph) -> str | None:
         )
     except SyntaxError:
         return None
-    return _canonical_dataset_form(dataset, pyoxigraph)
+    return _canonical_dataset_form(dataset)
 
 
-def _rdfc_canonical_text(data: str, rdf_format, pyoxigraph) -> str:
+def _rdfc_canonical_text(data: str, rdf_format: pyoxigraph.RdfFormat) -> str:
     """Return the exact RDFC-1.0 form of serialized RDF text."""
     dataset = pyoxigraph.Dataset(pyoxigraph.parse(data, format=rdf_format))
-    return _canonical_dataset_form(dataset, pyoxigraph)
+    return _canonical_dataset_form(dataset)
 
 
-def deterministic_turtle(graph: "RdfGraph") -> str:
+def deterministic_turtle(graph: Graph) -> str:
     """Serialize an RDF graph to Turtle with deterministic output ordering.
 
     Uses a three-phase hybrid pipeline for **correctness**, **diff
@@ -257,16 +249,6 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
        W3C Recommendation.  https://www.w3.org/TR/rdf11-concepts/
     """
     _require_single_graph(graph)
-
-    try:
-        import pyoxigraph
-    except ImportError as exc:
-        raise ImportError(
-            "pyoxigraph >= 0.5.4 is required for deterministic_turtle(). "
-            "Install it with: pip install 'pyoxigraph>=0.5.4'"
-        ) from exc
-
-    from rdflib import BNode, Graph, Literal, URIRef
 
     # ── Phase 1: RDFC-1.0 canonicalization ──────────────────────────
     nt_data = graph.serialize(format="nt")
@@ -361,7 +343,7 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
 
     # Compare with the source graph, not the intermediate rdflib graph: that
     # catches any identity loss during pyoxigraph-to-rdflib term conversion.
-    expected = _rdfc_canonical_form(graph, pyoxigraph)
+    expected = _rdfc_canonical_form(graph)
 
     def _round_trips(text: str) -> bool:
         reparsed = Graph(bind_namespaces="none")
@@ -373,7 +355,7 @@ def deterministic_turtle(graph: "RdfGraph") -> str:
             # what the two-attempt structure below exists for.
             return False
         try:
-            actual = _rdfc_canonical_text(text, pyoxigraph.RdfFormat.TURTLE, pyoxigraph)
+            actual = _rdfc_canonical_text(text, pyoxigraph.RdfFormat.TURTLE)
         except SyntaxError:
             return False
         return expected is not None and actual == expected
