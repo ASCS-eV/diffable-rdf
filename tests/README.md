@@ -43,6 +43,25 @@ with that wheel environment's Python:
   -c /path/to/diffable-rdf/pyproject.toml /path/to/diffable-rdf/tests
 ```
 
+To create a fresh wheel environment, verify the exact artifact, and run that
+same installed artifact's suite, provide its full filename to the verifier:
+
+```bash
+python /path/to/diffable-rdf/scripts/test_wheel.py \
+  /path/to/dist/diffable_rdf-0.3.0-py3-none-any.whl
+```
+
+The verifier rejects missing or extra wheel paths, installs no editable
+project, runs pytest from a neutral directory, and checks the wheel digest
+again before success.
+
+Documentation Python fences use the exact opening line ` ```python` and the
+exact closing line ` ````, with no indentation, case variation, version
+suffix, or extra info string. Every one is preceded only by
+`<!-- example -->` or `<!-- signature -->`; the first is executed and the
+second is parsed as a function header. Other Python-like fence spellings are
+rejected so a new example cannot bypass the check.
+
 Run focused groups with standard pytest selection, for example:
 
 ```bash

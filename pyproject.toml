@@ -68,6 +68,7 @@ packages = ["src/diffable_rdf"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "scripts",
     "src/diffable_rdf",
     "tests",
     "docs/api.md",

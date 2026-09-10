@@ -24,6 +24,8 @@ Requires Python 3.10+. Installs `rdflib>=6.3.2` and `pyoxigraph>=0.5.4`.
 
 ## Quickstart
 
+<!-- example -->
+
 ```python
 from rdflib import Graph, Literal, Namespace
 
