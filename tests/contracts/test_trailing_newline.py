@@ -87,8 +87,8 @@ def test_an_empty_graph_stays_an_empty_document() -> None:
     assert canonicalize_rdf_graph(Graph(), "json-ld") == "[]\n"
 
 
-def test_rdf_xml_output_still_parses_after_the_added_newline() -> None:
-    """RDF/XML is the format that gained a byte; it must still be valid."""
+def test_rdf_xml_output_has_one_trailing_newline_and_parses() -> None:
+    """RDF/XML output has exactly one trailing newline and remains valid."""
     result = canonicalize_rdf_graph(_graph(), "xml")
 
     assert result.endswith("</rdf:RDF>\n")

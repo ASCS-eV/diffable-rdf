@@ -1,4 +1,4 @@
-"""Regression tests for preserving RDF literal identity through serialization."""
+"""RDF literal identity contracts for serialization."""
 
 from __future__ import annotations
 
@@ -176,15 +176,9 @@ def test_deterministic_turtle_is_stable_after_lexical_preserving_reparse() -> No
 
 
 def test_typed_literals_are_written_in_quoted_form() -> None:
-    """Pin the presentation choice, not only the fidelity it protects.
+    """Typed literals use quoted Turtle form.
 
-    If rdflib's ``use_plain`` default flipped, most typed literals would come
-    out as bare Turtle values. Verified consequence: that is a *presentation*
-    change rather than data loss for values whose lexical form Turtle can spell
-    -- ``"01"^^xsd:integer`` would render ``01``, which parses back to the same
-    term and passes the round-trip guard. It is caught for doubles, where the
-    shorthand loses precision (see
-    ``test_deterministic_turtle_preserves_full_double_precision``). So this
+    Quoted form preserves lexical presentation alongside RDF term fidelity. This
     test exists for the half the guard cannot see: the output form itself, which
     callers diff.
     """

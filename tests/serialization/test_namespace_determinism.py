@@ -64,7 +64,7 @@ PROCESS_SCRIPT = textwrap.dedent(
 
 
 def _process_outputs(mode: str, output_format: str | None = None) -> list[str]:
-    source = str(Path(__file__).resolve().parents[1] / "src")
+    source = str(Path(__file__).resolve().parents[2] / "src")
     outputs = []
     for seed in (1, 7, 31, 509):
         env = os.environ.copy()
@@ -198,10 +198,7 @@ def test_deterministic_turtle_degraded_path_keeps_graph_and_bindings() -> None:
 def test_a_query_string_namespace_is_declared_as_a_prefix(namespace: str) -> None:
     """A namespace with a query string is usable, so its binding must survive.
 
-    The prefix filter used to drop these, attributing it to rdflib being unable
-    to round-trip such CURIEs. That does not reproduce on any supported
-    version, so the binding was being discarded for no reason -- costing
-    verbosity, since every IRI under it was then written out in full.
+    Query-string namespaces form valid CURIEs and retain compact output.
     """
     graph = Graph(bind_namespaces="none")
     graph.bind("q", URIRef(namespace))
@@ -221,8 +218,7 @@ def test_a_query_string_namespace_is_declared_as_a_prefix(namespace: str) -> Non
         pytest.param("http://ex/vocab#", True, id="trailing-fragment"),
         pytest.param("http://ex/vocab/", True, id="trailing-slash"),
         pytest.param("http://ex/a?b=c&d=", True, id="query-string"),
-        # An embedded fragment used to be skipped. pyoxigraph accepts it and
-        # its CURIEs round-trip exactly, so skipping it only cost compactness.
+        # Embedded fragments form valid CURIEs under pyoxigraph.
         pytest.param("http://ex/a#b", True, id="embedded-fragment"),
         pytest.param("http://ex/a#b/", True, id="embedded-fragment-then-slash"),
         # Not IRIs at all, and each is rejected as a prefix by pyoxigraph.
@@ -248,15 +244,8 @@ def test_the_prefix_filter_matches_what_pyoxigraph_will_accept(namespace: str, u
     assert _is_safe_prefix_iri(namespace) is usable
 
 
-def test_one_undeclarable_binding_no_longer_erases_every_other_prefix() -> None:
-    """The filter being too narrow was not free: it lost the caller's prefixes.
-
-    ``http://ex/%2`` is an incomplete percent-escape, so not an IRI -- but it
-    *is* a prefix of the valid term ``http://ex/%20x``, so it survived the
-    used-prefix filter and reached pyoxigraph, which refused it. The recovery
-    then re-serialized with no prefixes at all, and an unrelated binding the
-    caller did rely on vanished from the document.
-    """
+def test_an_undeclarable_binding_preserves_usable_prefixes() -> None:
+    """An undeclarable binding does not remove usable caller prefixes."""
     good = Namespace("http://good.example/")
     graph = Graph(bind_namespaces="none")
     graph.bind("good", good)

@@ -1,16 +1,7 @@
-"""NaN and infinity are ordinary numeric data, and must serialize.
+"""Non-finite numeric literals retain their lexical RDF identity.
 
-Both public entry points used to disagree here: `canonicalize_rdf_graph` wrote
-them, and `deterministic_turtle` raised. The cause was rdflib's
-`Literal._literal_n3`, which re-spells `inf` to `INF` and `nan` to `NaN` for
-the numeric datatypes *regardless* of its `use_plain` argument — so the
-rendered lexical form was one the graph never held, and the round-trip guard
-correctly refused it. Literals are now rendered locally, which removes both
-the crash and the private-API dependency.
-
-A second, independent crash lived in the object sort: rdflib's `Literal.__lt__`
-compares over the value space, so a `NaN` beside an `xsd:decimal` raised
-`decimal.InvalidOperation` from inside `list.sort()`.
+RDF numeric lexical forms include ``NaN`` and infinities. These tests cover
+the local rendering and deterministic term ordering required for those values.
 """
 
 from __future__ import annotations
@@ -39,7 +30,7 @@ NON_FINITE = [
 
 @pytest.mark.parametrize("value", NON_FINITE)
 def test_deterministic_turtle_serializes_a_non_finite_number(value: Literal) -> None:
-    """Every one of these raised before; the graph must survive the round trip."""
+    """Each non-finite numeric literal round-trips through Turtle."""
     graph = Graph()
     graph.add((EX.s, EX.p, value))
 
@@ -70,7 +61,7 @@ def test_the_lexical_form_the_graph_holds_is_what_is_written(value: Literal) -> 
 
 @pytest.mark.parametrize("value", NON_FINITE)
 def test_both_entry_points_agree_on_a_non_finite_number(value: Literal) -> None:
-    """They disagreed before: one wrote it, the other raised."""
+    """Both public Turtle entry points produce isomorphic graphs."""
     graph = Graph()
     graph.add((EX.s, EX.p, value))
 
@@ -81,7 +72,7 @@ def test_both_entry_points_agree_on_a_non_finite_number(value: Literal) -> None:
 
 
 def test_a_non_finite_number_beside_a_decimal_does_not_raise() -> None:
-    """rdflib's value-space sort raised decimal.InvalidOperation here."""
+    """Mixed non-finite and decimal literals have a total output order."""
     graph = Graph()
     graph.add((EX.s, EX.p, Literal("NaN", datatype=XSD.double)))
     graph.add((EX.s, EX.p, Literal("1.5", datatype=XSD.decimal)))
@@ -131,7 +122,7 @@ def test_the_object_order_is_total_for_value_tied_and_mixed_terms() -> None:
 
 
 def test_literals_needing_escapes_still_round_trip() -> None:
-    """Local rendering owns the escaping now, so pin the awkward characters."""
+    """Local rendering preserves literals requiring Turtle escapes."""
     graph = Graph()
     for index, text in enumerate(
         [
@@ -143,10 +134,7 @@ def test_literals_needing_escapes_still_round_trip() -> None:
             "a\tb",
             'a"""b',
             'a\nb"',
-            # The long-form branch and its `"""` escape: a multi-line literal
-            # is written between triple quotes, so an embedded `"""` has to be
-            # escaped there and a trailing quote would otherwise close the
-            # literal one character early. None of this was covered.
+            # Triple-quoted literal values require escaping embedded delimiters.
             'a\nb"""c',
             'a\nb""""c',
             'a\nb"""',

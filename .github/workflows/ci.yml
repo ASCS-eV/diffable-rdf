@@ -37,9 +37,7 @@ jobs:
         run: uv run --frozen mypy src/diffable_rdf
 
       - name: Run tests
-        # --cov-fail-under makes the coverage number a gate rather than a
-        # report nobody reads. Set just below the measured figure: it is a
-        # ratchet against new untested code, not a target to chase.
+        # Enforce the project's minimum statement coverage.
         run: uv run --frozen pytest -q --cov=diffable_rdf --cov-report=term-missing --cov-fail-under=95
 
   minimum-versions:
@@ -89,8 +87,7 @@ jobs:
         run: uv build
 
       - name: Verify the metadata
-        # Moved here from the test matrix, which built and checked the same
-        # distributions once per Python version.
+        # Validate distribution metadata before installation.
         run: uv run --with twine python -m twine check dist/*
 
       - name: Install the built wheel into a clean environment
@@ -121,10 +118,7 @@ jobs:
 
   newest-versions:
     # The `test` job pins everything to uv.lock and `minimum-versions` pins the
-    # declared floors, so neither notices a *new* dependency release. This
-    # library's output is coupled to rdflib's and pyoxigraph's behaviour, so a
-    # release that changes it must be found deliberately. Scheduled and manual
-    # only: an upstream release breaking this must not block unrelated PRs.
+    # declared floors, so this job checks current dependency compatibility.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:

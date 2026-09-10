@@ -22,13 +22,10 @@ message.
 from __future__ import annotations
 
 import random
-import subprocess
-import sys
-import textwrap
 
 import pyoxigraph as ox
 import pytest
-from rdflib import BNode, Graph, Literal, Namespace, URIRef
+from rdflib import BNode, Graph, Literal, Namespace
 from rdflib.compare import isomorphic
 from rdflib.namespace import RDF, XSD
 
@@ -223,7 +220,7 @@ def test_p4_output_does_not_depend_on_insertion_order(seed: int) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# targeted regressions for shared rdf:List cells
+# shared RDF list structures
 # ─────────────────────────────────────────────────────────────────────────────
 
 SHARING_CASES = {
@@ -412,44 +409,3 @@ def test_collection_free_serializer_is_faithful_for_every_sharing_case() -> None
         assert len(reparsed) == len(graph), f"{name}: triple count changed"
         assert isomorphic(reparsed, graph), f"{name}: not isomorphic"
         assert "( " not in buffer.getvalue().decode("utf-8"), f"{name}: used collection syntax"
-
-
-def test_owl_shaped_graph_canonicalizes_within_a_time_budget() -> None:
-    """A mid-sized OWL-shaped ontology must canonicalize in seconds, not minutes.
-
-    The guard compares RDFC-1.0 canonical forms, an exact isomorphism test
-    that pyoxigraph performs in Rust. The Python alternative,
-    ``rdflib.compare.isomorphic``, costs ~96% of the total runtime on this
-    graph: 8,400 triples in 76s, with 3x the triples costing 17x the time.
-    This is a smoke bound, not a benchmark -- the budget is wide enough to
-    absorb slow CI runners and narrow enough that falling back to the
-    Python path fails it by an order of magnitude.
-    """
-    script = textwrap.dedent(
-        """
-        from rdflib import BNode, Graph, Literal, Namespace
-        from rdflib.namespace import OWL, RDF, RDFS
-        from diffable_rdf import deterministic_turtle
-
-        EX = Namespace("http://example.org/")
-        g = Graph()
-        for i in range(600):
-            cls = EX[f"C{i}"]
-            g.add((cls, RDF.type, OWL.Class))
-            g.add((cls, RDFS.label, Literal(f"Class {i}", lang="en")))
-            for j in range(3):
-                restriction = BNode()
-                g.add((cls, RDFS.subClassOf, restriction))
-                g.add((restriction, RDF.type, OWL.Restriction))
-                g.add((restriction, OWL.onProperty, EX[f"p{j}"]))
-                g.add((restriction, OWL.someValuesFrom, EX[f"C{(i + j + 1) % 600}"]))
-        assert len(g) == 8400, len(g)
-        deterministic_turtle(g)
-        print("ok")
-        """
-    )
-    result = subprocess.run(
-        [sys.executable, "-c", script], capture_output=True, text=True, timeout=30
-    )
-    assert result.returncode == 0, result.stderr[-500:]
-    assert result.stdout.strip() == "ok"

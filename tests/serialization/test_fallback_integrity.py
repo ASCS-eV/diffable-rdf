@@ -1,19 +1,7 @@
-"""The fallback path must not corrupt, lose, or silently drop a graph.
+"""Fallback serialization preserves complete, parseable RDF graphs.
 
-Three defects lived here, all invisible to a green suite:
-
-`str.splitlines()` was used to sort line-oriented output. It also breaks on the
-Unicode line separators — U+2028, U+2029, U+0085, U+000B, U+000C, U+001C..E —
-that N-Triples permits **raw** inside a quoted literal. One statement became
-two "lines", they sorted independently, and the separator was rewritten as a
-newline: the literal's value changed and the document no longer parsed.
-
-`to_canonical_graph` returns a `ReadOnlyGraphAggregate`, a dataset container.
-Handing it straight to rdflib's serializers made some of them emit an empty
-document for a non-empty graph.
-
-And rdflib's own errors reached callers raw, naming neither the format nor a
-way forward.
+The fixtures cover Unicode line separators, canonical graph extraction, and
+format-specific error reporting.
 """
 
 from __future__ import annotations
@@ -62,17 +50,14 @@ def _degraded(*extra, trigger: URIRef = RELATIVE_IRI) -> Graph:
 # The line-oriented sort is exercised directly rather than through
 # `canonicalize_rdf_graph`, because no graph can currently reach it that way:
 # a graph takes the fallback only by holding a term N-Triples cannot express,
-# and the representability guard refuses those first. Verified for every
-# trigger there is -- relative IRI, literal predicate, blank-node predicate,
-# and IRIs pyoxigraph rejects (a doubled fragment, a bad percent-escape, a bad
-# host). That guard is defence in depth, not a reason to leave the sort broken:
-# it is one `_FORMAT_MAP` entry away from being reachable again.
+# and the representability guard refuses those first. The direct tests cover
+# Unicode line separators independently of public format dispatch.
 @pytest.mark.parametrize("separator", UNICODE_BREAKS)
 @pytest.mark.parametrize("output_format", ["nt", "nquads"])
 def test_the_line_sort_preserves_a_literal_carrying_a_unicode_break(
     output_format: str, separator: str
 ) -> None:
-    """`str.splitlines()` split the statement in two and rewrote the separator."""
+    """Newline-only splitting preserves Unicode literal separators."""
     value = Literal("a" + separator + "b")
     graph = Graph()
     graph.add((EX.s, EX.p, value))
@@ -113,7 +98,7 @@ def test_the_public_path_refuses_a_degraded_graph_for_line_formats(
 
 
 def test_a_delegated_format_does_not_return_an_empty_document() -> None:
-    """`hext` returned '' for a one-triple graph."""
+    """Delegated serializers emit a document for a non-empty graph."""
     graph = Graph(bind_namespaces="none")
     graph.add((EX.s, EX.p, Literal("v")))
 

@@ -1,15 +1,8 @@
-"""A graph's base must never change the terms a consumer reads back.
+"""Base-IRI contracts for RDF terms read by standard format parsers.
 
-`canonicalize_rdf_graph` hands `graph.base` to pyoxigraph, which relativizes
-per RFC 3986 section 5.1 — resolving `<#a>` against `http://ex.org/d#` discards
-the base's fragment and gives `http://ex.org/d#a`. rdflib's notation3 parser
-concatenates instead, yielding `http://ex.org/d##a`: every term of the graph
-changed, silently.
-
-The round-trip guard could not see it, because it checked only that rdflib
-*parses* and then compared **pyoxigraph's** canonical forms — two correct
-readings, agreeing with each other. `deterministic_turtle` was never affected;
-it drops the base outright, with a comment citing this exact hazard.
+RFC 3986 section 5.2.2 resolves `<#a>` against `http://ex.org/d#` as
+`http://ex.org/d#a`. Format parsers must preserve those graph terms without
+introducing an additional fragment separator.
 """
 
 from __future__ import annotations
@@ -34,8 +27,8 @@ def _hash_base_graph() -> Graph:
 
 
 @pytest.mark.parametrize("output_format", VERIFIED)
-def test_a_fragment_base_does_not_change_the_terms(output_format: str) -> None:
-    """The defect: every IRI came back with a doubled `#`."""
+def test_a_fragment_base_preserves_the_terms(output_format: str) -> None:
+    """A fragment base preserves each IRI term in every verified format."""
     graph = _hash_base_graph()
 
     result = canonicalize_rdf_graph(graph, output_format=output_format)
@@ -50,13 +43,31 @@ def test_a_fragment_base_does_not_change_the_terms(output_format: str) -> None:
     assert "##" not in result
 
 
-def test_deterministic_turtle_was_never_affected() -> None:
-    """It drops the base; pin that so the two entry points cannot diverge again."""
+def test_deterministic_turtle_preserves_fragment_base_terms() -> None:
+    """Deterministic Turtle preserves terms from a graph with a fragment base."""
     graph = _hash_base_graph()
 
     result = deterministic_turtle(graph)
 
     assert isomorphic(Graph().parse(data=result, format="turtle"), graph)
+
+
+def test_deterministic_turtle_preserves_hash_path_and_slash_bases() -> None:
+    """Hash, path, and slash bases preserve all graph terms."""
+    for base in ("http://example.org/d#", "http://example.org/d", "http://example.org/d/"):
+        graph = Graph(base=base)
+        graph.add((URIRef("http://example.org/d#a"), EX.pred, Literal("v0")))
+        graph.add((URIRef("http://example.org/d#b"), EX.pred, Literal("v1")))
+        result = deterministic_turtle(graph)
+        assert isomorphic(Graph().parse(data=result, format="turtle"), graph), base
+
+
+def test_canonicalize_rdf_graph_handles_a_relative_base() -> None:
+    """A relative RDFLib base produces a complete Turtle document."""
+    graph = Graph(base="book/")
+    graph.bind("ex", EX)
+    graph.add((EX.s, EX.p, Literal("v")))
+    assert "http://example.org/s" in canonicalize_rdf_graph(graph, output_format="turtle")
 
 
 @pytest.mark.parametrize("output_format", ["turtle", "trig", "n3"])
@@ -74,7 +85,7 @@ def test_an_ordinary_base_still_relativizes(output_format: str) -> None:
 
 
 def test_dropping_a_fragment_base_is_reported() -> None:
-    """Silently changing how output is written would be worse than the bug."""
+    """The serializer reports that it omits a fragment base."""
     import logging
 
     graph = _hash_base_graph()
@@ -96,12 +107,7 @@ def test_dropping_a_fragment_base_is_reported() -> None:
 
 
 def test_the_guard_catches_an_iri_the_input_never_contained() -> None:
-    """The general defence, not just the base case.
-
-    rdflib normalizes literals but not IRIs, so an IRI in its re-parse that the
-    source lacks means the output says something else to the library's primary
-    consumer — which is exactly what the base defect did.
-    """
+    """Round-trip validation rejects output containing an absent IRI."""
     graph = Graph()
     graph.add((URIRef("http://example.org/s"), URIRef("http://example.org/p"), Literal("v")))
 
@@ -113,13 +119,8 @@ def test_the_guard_catches_an_iri_the_input_never_contained() -> None:
         )
 
 
-def test_the_guard_still_tolerates_rdflibs_literal_normalization() -> None:
-    """It must not fire on the thing it deliberately delegates to pyoxigraph.
-
-    rdflib reads `"01"^^xsd:integer` back as `"1"`, which is why the exact
-    identity comparison uses pyoxigraph. The new IRI check must not turn that
-    into a false alarm.
-    """
+def test_the_guard_tolerates_rdflibs_literal_normalization() -> None:
+    """Round-trip validation accepts RDFLib integer lexical normalization."""
     from rdflib.namespace import XSD
 
     graph = Graph()
@@ -127,12 +128,7 @@ def test_the_guard_still_tolerates_rdflibs_literal_normalization() -> None:
     graph.add((EX.s, EX.p, Literal("01", datatype=XSD.integer, normalize=False)))
     graph.add((EX.s, EX.p, Literal("1", datatype=XSD.integer, normalize=False)))
 
-    # The call succeeding at all is the assertion: the guard runs inside it,
-    # and a false alarm would raise here.
     result = canonicalize_rdf_graph(graph, "turtle")
 
-    # Both terms survive. Counted with pyoxigraph, because rdflib's parser
-    # merges them -- the very normalization the guard delegates around. This
-    # path writes Turtle's integer shorthand (`01`, `1`) rather than the quoted
-    # form deterministic_turtle uses, so assert on the terms, not the text.
+    # Pyoxigraph preserves both lexical terms while RDFLib normalizes them.
     assert len(list(ox.parse(result, format=ox.RdfFormat.TURTLE))) == 2

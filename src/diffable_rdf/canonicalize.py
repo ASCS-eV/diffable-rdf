@@ -114,16 +114,9 @@ _COLLECTION_CAPABLE_FORMATS = frozenset({"turtle", "ttl", "n3", "trig"})
 _RDFLIB_SERIALIZER_NAMES: dict[ox.RdfFormat, str] = {
     ox.RdfFormat.TURTLE: "turtle",
     ox.RdfFormat.N_TRIPLES: "nt",
-    # N-Quads, deliberately not rdflib's ``nquads``. Its serializer needs a
-    # context-aware store, which a canonicalized graph is not, and satisfying
-    # that with a Dataset makes the output depend on how the installed rdflib
-    # spells the default graph: 6.3.2 writes an explicit
-    # ``<urn:x-rdflib:default>`` graph term where 7.6.0 leaves the slot empty.
-    # A single graph has no graph name to write, and the N-Quads grammar makes
-    # the graph label optional, so every N-Triples document is already a valid
-    # N-Quads document in the default graph. Emitting N-Triples is therefore
-    # both correct and version-independent, and matches the pyoxigraph path
-    # byte for byte.
+    # N-Quads uses N-Triples for a single default graph. The N-Quads grammar
+    # makes the graph label optional, so every N-Triples document is valid
+    # default-graph N-Quads with stable output bytes.
     ox.RdfFormat.N_QUADS: "nt",
     ox.RdfFormat.RDF_XML: "xml",
     ox.RdfFormat.TRIG: "trig",
@@ -185,12 +178,8 @@ def _finalize_rdf_xml(serialized: str) -> str:
     raw CR characters preserves both CR and CRLF RDF literal values without
     touching serializer-produced markup, ordinary LF, or existing escapes.
 
-    The replacement compensates for pyoxigraph writing a literal CR raw, which
-    is an upstream defect rather than something this format requires;
-    quick-xml fixed it in 0.42.0 and oxigraph's ``main`` already vendors that.
-    When a pyoxigraph release carries it there will be no raw CR left here and
-    this becomes a no-op, so it should be retired --
-    ``tests/test_upstream_tripwires.py`` fails when that happens.
+    Pyoxigraph may emit literal CR characters in RDF/XML. Applying the
+    replacement produces XML 1.0 character references on every backend path.
     """
     _assert_xml_10_text_representable(serialized)
     return serialized.replace("\r", "&#xD;")
@@ -208,12 +197,9 @@ def _element_sort_key(element: ElementTree.Element) -> _XmlSortKey:
     order -- the same arrangement the line-oriented formats get from sorting
     their lines, where ``<`` precedes ``_``.
 
-    For the property elements inside them the tag *is* the predicate, so it
-    leads. The earlier key led with any ``rdf:about``/``rdf:nodeID`` it found,
-    which for a property element is the *object's* identity: properties were
-    ordered by the blank-node label of their object before their predicate, so
-    a label change anywhere in the graph reshuffled unrelated properties and
-    turned a one-line edit into a large diff.
+    For property elements the tag is the predicate and leads the key. Object
+    identity follows the predicate so blank-node labels do not reorder
+    unrelated properties.
 
     The key is built from the parsed element rather than from re-serializing
     it, so it cannot depend on which prefix names a serializer would choose.
@@ -355,22 +341,16 @@ def _sort_rdf_xml_descriptions(serialized: str) -> str:
 
     rdflib's RDF/XML serializer, which the degraded path uses, emits both its
     ``rdf:Description`` elements and the property elements inside them in an
-    order that follows its own graph traversal, and so varies between
-    processes: measured at 6 distinct documents over 6 hash seeds for one
-    graph, differing in element order alone. RDF/XML attaches no meaning to
+    order that follows its own graph traversal. RDF/XML attaches no meaning to
     either order -- each property element is one triple -- so sorting them is
     lossless and makes the output reproducible.
 
     This is the same compensation the line-oriented branch already applies by
     sorting N-Triples lines, against the same serializer's instability.
 
-    The document is parsed to decide the order and then *not* re-serialized:
-    each element is moved as a span of the original text. Re-serializing it
-    through ``ElementTree`` looked simpler and cost two things. It resolved
-    prefixes from ``ElementTree``'s process-global registry, so the caller's
-    ``beta:`` came back as ``ns1:`` -- and any other code in the process
-    calling ``ElementTree.register_namespace`` changed this library's output
-    bytes, which is exactly the property it exists to provide.
+    The document is parsed to decide the order and each element is moved as a
+    span of the original text. This preserves caller prefix names and keeps
+    output independent of ``ElementTree``'s process-global namespace registry.
 
     rdflib's *plain* XML serializer emits neither ``rdf:parseType="Collection"``
     nor ``parseType="Literal"`` -- only its pretty-printing serializer does, and
@@ -455,8 +435,8 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
     To degrade gracefully instead of silently emitting non-deterministic
     output, blank-node labels are canonicalized with rdflib's own
     isomorphism-based canonicalization (:func:`rdflib.compare.to_canonical_graph`,
-    which uses a content-derived hash, not run-local ids) and the original
-    prefix and base bindings that the canonical graph drops are restored.
+    which uses a content-derived hash, not run-local ids) and safe original
+    prefix bindings are retained.
     For line-oriented formats the serialized lines are additionally sorted.
 
     Relative IRIs are preserved verbatim (not resolved against the base):
@@ -514,13 +494,9 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         _NoCollectionTurtleSerializer(canonical).serialize(buffer, encoding="utf-8")
         serialized = buffer.getvalue().decode("utf-8")
     else:
-        # Copy into a clean single Graph, as the branch above does.
-        # ``to_canonical_graph`` returns a ReadOnlyGraphAggregate -- a
-        # ConjunctiveGraph subclass with a context-aware store and a fresh
-        # random identifier per call. Handing that straight to rdflib's
-        # serializers made some of them emit an empty document for a non-empty
-        # graph (``hext`` did), and put a dataset container into a serializer
-        # one function after ``_require_single_graph`` refused one at the door.
+        # Serialize an independent single Graph. ``to_canonical_graph``
+        # returns a context-aware dataset container, while this branch needs
+        # a graph accepted by each RDFLib serializer.
         canonical = Graph(bind_namespaces="none")
         for triple in to_canonical_graph(graph):
             canonical.add(triple)
@@ -528,8 +504,7 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         # This library accepts more aliases than rdflib registers plugins for
         # -- ``n-triples``, ``n-quads`` and ``rdf/xml`` are ours, not rdflib's,
         # and its lookup is exact. Translate every mapped alias to the name
-        # rdflib knows, so two spellings of one format cannot behave
-        # differently here the way they used to.
+        # RDFLib knows so all aliases of a format behave identically.
         ox_target = _FORMAT_MAP.get(output_format.lower())
         serializer_format = (
             _RDFLIB_SERIALIZER_NAMES.get(ox_target, output_format)
@@ -558,13 +533,9 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
                 "carry any graph that reaches the fallback path."
             )
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
-        # Split on newlines only, never with ``str.splitlines()``: that also
-        # breaks on the Unicode line separators (U+2028, U+0085, U+000B and
-        # friends) which N-Triples permits *raw* inside a quoted literal, so a
-        # single statement became two "lines", they sorted independently, and
-        # the separator was rewritten as a newline -- corrupting the value and
-        # leaving a document that would not parse. rdflib escapes \n and \r,
-        # so a bare newline can only be a statement boundary.
+        # Split on newline characters only. N-Triples permits Unicode line
+        # separators inside quoted literals; RDFLib escapes ``\n`` and ``\r``,
+        # so a bare newline is a statement boundary.
         lines = [line for line in serialized.split("\n") if line.strip()]
         return "\n".join(sorted(lines)) + "\n"
     return serialized
@@ -573,10 +544,7 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
 def _iri_terms(triples: list) -> set[str]:
     """Return the set of IRI strings appearing anywhere in ``triples``.
 
-    Walks subjects, predicates, non-literal objects, and literal datatypes.
-    Used to filter the prefix dict down to namespaces that are actually
-    referenced by the canonicalized graph, so the output isn't padded with
-    unused ``@prefix`` declarations.
+    Includes subjects, predicates, non-literal objects, and literal datatypes.
     """
     iris: set[str] = set()
     for t in triples:
@@ -612,14 +580,8 @@ def _turtle_protected_spans(text: str) -> list[tuple[int, int]]:
     forms: single- and triple-quoted, each with either quote character, and a
     backslash escapes the next character inside all of them.
 
-    IRIREFs have to be skipped rather than scanned through.  Production [18]
-    excludes ``"`` from an IRIREF but *permits* ``'``, so an IRI as ordinary as
-    ``<http://ex/a'b>`` opened a string span that ran to the end of the
-    document and shifted every span after it: the caller then rewrote inside a
-    literal and produced Turtle that does not parse, which the round-trip
-    guard reported as a serialization defect on valid input.  Inside an IRIREF
-    a backslash appears only in a UCHAR escape and ``>`` is excluded, so the
-    first ``>`` ends the token.
+    IRIREFs are protected token boundaries. Production [18] permits ``'`` in
+    an IRIREF; a backslash is only a UCHAR escape and ``>`` ends the token.
     """
     spans: list[tuple[int, int]] = []
     index = 0
@@ -668,12 +630,8 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
     rewrite each such CURIE to its expanded ``<IRI>`` form so the output
     round-trips through rdflib.
 
-    The rewrite is applied only outside string literals and IRIREFs.  A literal
-    whose text happens to look like such a CURIE -- ``"ex:thing\\. "`` -- is
-    ordinary RDF data, and rewriting inside it corrupted the value and produced
-    output that would not parse.  Only the other IRIs in that namespace keep
-    their prefix, so this stays more compact than dropping the prefix binding
-    altogether.
+    The rewrite applies only outside string literals and IRIREFs. Literal text
+    remains RDF data, while other IRIs in the namespace retain their prefix.
     """
     if not prefixes:
         return turtle_text
@@ -720,21 +678,12 @@ def _is_safe_prefix_iri(iri: str) -> bool:
 
     Skipping matters more than it looks: the ``Invalid prefix`` recovery at
     the call site re-serializes with *no* prefixes at all, so one unusable
-    binding used to erase every other prefix from the document.  A binding for
-    ``http://ex/%2`` (an incomplete percent-escape, so not an IRI) alongside a
-    term ``http://ex/%20x`` reaches exactly that: the caller's unrelated
-    prefixes silently disappeared, and the output bytes depended on a binding
-    that contributes nothing.
+    binding must not erase other prefixes from the document. A binding for an
+    incomplete percent-escape is ignored while usable caller prefixes remain.
 
-    Two earlier rules here were wrong in the other direction and cost
-    compactness for nothing.  A ``#`` before the last character is *not*
-    unsafe: ``http://ex/a#b`` and ``http://ex/a#b/`` are both accepted as
-    prefixes and their CURIEs round-trip exactly (rdflib 6.3.2 and 7.6.0,
-    pyoxigraph 0.5.4 and 0.5.11).  Only an IRI carrying a *second* ``#`` is
-    refused, and it is refused by this check because two fragments make it an
-    invalid IRI, not because of where the ``#`` sits.  Query strings are not
-    unsafe either: ``http://ex/?q=`` and ``http://ex/a?b=c&d=`` round-trip
-    exactly on the same versions.
+    Embedded fragments and query strings can be valid prefix IRIs. A second
+    fragment separator is invalid, and this validation rejects it along with
+    other malformed IRI text.
     """
     return _is_absolute_iri(iri)
 
@@ -894,11 +843,9 @@ def canonicalize_rdf_graph(
         )
         result = _deterministic_fallback_serialize(graph, output_format)
         if ox_format == ox.RdfFormat.RDF_XML:
-            # The order of these two no longer matters -- the sort moves spans
-            # of rdflib's text and leaves its escaping alone. rdflib writes a
-            # literal CR as ``&#13;`` itself, so the CR replacement is a no-op
-            # here; what this call still does on this path is assert that the
-            # document is representable in XML 1.0.
+            # RDFLib escapes literal carriage returns as ``&#13;``. Applying
+            # finalization here keeps XML 1.0 representability local to this
+            # shared output step.
             result = _finalize_rdf_xml(_sort_rdf_xml_descriptions(result))
         return _with_single_trailing_newline(result)
 
@@ -922,7 +869,7 @@ def canonicalize_rdf_graph(
         # A base with a fragment cannot be used for relativization that rdflib
         # can read back. pyoxigraph correctly writes <#a> for
         # http://ex.org/d#a under base http://ex.org/d#, per RFC 3986 section
-        # 5.1, which discards the base's fragment. rdflib's notation3 parser
+        # 5.2.2, which discards the base's fragment. rdflib's notation3 parser
         # instead concatenates, yielding http://ex.org/d##a -- a different IRI
         # in every position. deterministic_turtle drops the base outright for
         # this reason; dropping it just for a fragment base keeps ordinary
@@ -967,13 +914,9 @@ def canonicalize_rdf_graph(
             base_iri=base_iri,
         )
     except ValueError as e:
-        # pyoxigraph 0.5.x reports a rejected prefix IRI with a message that
-        # begins with "Invalid prefix", and a rejected base IRI with one that
-        # begins with "Invalid base IRI" (both verified empirically). A
-        # relative base is legal in rdflib, so both cases must degrade
-        # gracefully by retrying without them. Any *other* ValueError (an
-        # unrelated future serializer bug) must propagate so it surfaces as a
-        # stack trace rather than silently dropping all prefix declarations.
+        # Rejected prefix and base IRIs use these serializer error prefixes.
+        # Relative bases are valid RDFLib inputs, so retry without rejected
+        # values. Other serializer errors propagate unchanged.
         message = str(e)
         if not message.startswith(("Invalid prefix", "Invalid base IRI")):
             raise

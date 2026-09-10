@@ -212,12 +212,7 @@ def _two_node_quads() -> list:
 
 @pytest.mark.parametrize("iterations", [-1, -5, -100])
 def test_a_negative_iteration_count_is_rejected(iterations: int) -> None:
-    """``range`` treats a negative count as zero, which hid a caller's mistake.
-
-    The labels such a call returned were plausible and stable across processes,
-    and simply less diff-stable than the caller had asked for, with nothing to
-    signal that no refinement had happened.
-    """
+    """Negative refinement counts are outside the public contract."""
     quads = _two_node_quads()
 
     with pytest.raises(ValueError, match="non-negative"):
@@ -287,13 +282,7 @@ def _suffix(label: str) -> int:
 
 
 def test_the_tie_break_follows_the_canonical_numbering() -> None:
-    """The documented order is ``c14nN`` order, and ten nodes is where it broke.
-
-    The counter was assigned in lexicographic order, which puts ``c14n10``
-    between ``c14n1`` and ``c14n2`` -- so the suffixes stopped agreeing with
-    the numbering the docstring promises as soon as a dataset had ten blank
-    nodes.
-    """
+    """Collision suffixes follow numeric ``c14nN`` ordering."""
     names = [f"c14n{index}" for index in range(12)]
 
     labels = wl_blank_node_labels(_tied_quads(names))
@@ -303,12 +292,7 @@ def test_the_tie_break_follows_the_canonical_numbering() -> None:
 
 
 def test_adding_a_blank_node_does_not_relabel_the_tied_ones_before_it() -> None:
-    """Diff stability is the whole point of this module, ties included.
-
-    Adding ``c14n10`` to ten tied nodes used to relabel eight of them: the new
-    identifier sorted third lexicographically and shifted every counter after
-    it. One added node should add one label and move none.
-    """
+    """Appending ``c14n10`` preserves labels for ``c14n0`` through ``c14n9``."""
     ten = [f"c14n{index}" for index in range(10)]
 
     before = wl_blank_node_labels(_tied_quads(ten))
