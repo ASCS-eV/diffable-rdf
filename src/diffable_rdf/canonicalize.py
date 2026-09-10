@@ -622,9 +622,29 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
             f"({type(exc).__name__}: {exc}). This is a bug in diffable-rdf: "
             "please report it with the input graph."
         ) from exc
-    # rdflib parsing above is an interoperability check only. It normalizes
-    # numeric lexical forms, so use pyoxigraph's parsed terms for the exact
-    # identity comparison.
+    # rdflib's re-parse is more than a parseability check for IRIs. It
+    # normalizes *literals* -- which is why the exact identity comparison below
+    # uses pyoxigraph -- but it does not normalize IRIs, so any IRI rdflib reads
+    # that the source graph never contained means the output does not say what
+    # went in to the library's own primary consumer. That is how a base-relative
+    # reference rdflib mis-resolves would otherwise slip past: pyoxigraph
+    # resolves it correctly, so comparing only canonical forms compares two
+    # correct readings and sees nothing wrong.
+    source_iris = {str(term) for triple in source for term in triple if isinstance(term, rdflib.URIRef)}
+    reparsed_iris = {
+        str(term) for triple in reparsed for term in triple if isinstance(term, rdflib.URIRef)
+    }
+    invented = reparsed_iris - source_iris
+    if invented:
+        raise ValueError(
+            f"canonical {output_format} serialization does not round-trip: rdflib reads back "
+            f"{len(invented)} IRI(s) the input graph does not contain, such as "
+            f"{sorted(invented)[0]!r}. This is a bug in diffable-rdf: please report it with "
+            "the input graph."
+        )
+
+    # It normalizes numeric lexical forms, so use pyoxigraph's parsed terms for
+    # the exact identity comparison.
     try:
         actual = _rdfc_canonical_text(serialized, ox_format, ox)
     except SyntaxError as exc:
@@ -739,6 +759,22 @@ def canonicalize_rdf_graph(
 
     # 5. Collect prefixes for formats that support them.
     base_iri = str(graph.base) if graph.base else None
+    if base_iri is not None and "#" in base_iri and ox_format in _TURTLE_FAMILY_FORMATS:
+        # A base with a fragment cannot be used for relativization that rdflib
+        # can read back. pyoxigraph correctly writes <#a> for
+        # http://ex.org/d#a under base http://ex.org/d#, per RFC 3986 section
+        # 5.1, which discards the base's fragment. rdflib's notation3 parser
+        # instead concatenates, yielding http://ex.org/d##a -- a different IRI
+        # in every position. deterministic_turtle drops the base outright for
+        # this reason; dropping it just for a fragment base keeps ordinary
+        # bases working while emitting nothing rdflib will misread.
+        logger.warning(
+            "graph.base %r contains a fragment; emitting absolute IRIs instead of "
+            "relativizing, because rdflib's parser resolves a fragment-relative "
+            "reference by concatenation rather than per RFC 3986.",
+            base_iri,
+        )
+        base_iri = None
     prefixes: dict[str, str] | None = None
     if ox_format in _PREFIX_FORMATS:
         prefixes = {}

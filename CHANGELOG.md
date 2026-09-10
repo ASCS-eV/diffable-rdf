@@ -82,6 +82,19 @@ affected artifact, commit it once, and subsequent runs are stable again.
 
 ### Fixed
 
+- **A graph whose `base` contains a fragment no longer serializes to something
+  rdflib reads back differently.** `canonicalize_rdf_graph` relativized
+  `http://ex.org/d#a` to `<#a>` under base `http://ex.org/d#`, which is correct
+  per RFC 3986 but which rdflib's parser resolves by concatenation, reading
+  back `http://ex.org/d##a` — every term of the graph changed, silently, on
+  `turtle`, `trig` and `n3`. Such a base is now skipped with a warning and
+  absolute IRIs are written. An ordinary base still relativizes as before.
+- **The round-trip guard now checks the IRIs rdflib reads back**, not just that
+  it parses. rdflib normalizes literals but not IRIs, so an IRI in its re-parse
+  that the input never contained means the output says something different to
+  the library's primary consumer. The base defect passed the old guard because
+  it compared pyoxigraph's reading against pyoxigraph's — two correct readings.
+
 - **A literal containing a Unicode line separator no longer corrupts
   line-oriented fallback output.** N-Triples permits U+2028, U+2029, U+0085,
   U+000B, U+000C and U+001C-1E raw inside a quoted literal, and the sort used

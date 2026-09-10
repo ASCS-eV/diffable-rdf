@@ -205,6 +205,13 @@ IRI is handed to pyoxigraph, which emits a `@base` directive and RFC
 3986-correct relative references. If pyoxigraph rejects the base or a prefix
 IRI, the call logs a warning and re-serializes without them.
 
+One exception, with a warning: a base containing a **fragment** is not used for
+the Turtle family. RFC 3986 §5.1 discards a base's fragment when resolving, so
+`http://ex.org/d#a` under base `http://ex.org/d#` is correctly written `<#a>` —
+but rdflib's parser resolves a fragment reference by concatenation and reads it
+back as `http://ex.org/d##a`, a different IRI in every position. Absolute IRIs
+are written instead, so the output means the same thing to both readers.
+
 **RDF/XML.** Literal carriage returns are written as `&#xD;` character
 references, so XML newline normalization cannot turn CR or CRLF into LF. On the
 fallback path the `rdf:Description` elements and the property elements within
