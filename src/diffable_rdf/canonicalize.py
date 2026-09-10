@@ -50,6 +50,7 @@ from xml.etree import ElementTree
 
 import pyoxigraph as ox
 import rdflib
+from rdflib.plugin import PluginException
 from rdflib import Graph
 from rdflib.compare import to_canonical_graph
 
@@ -389,11 +390,17 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         _NoCollectionTurtleSerializer(canonical).serialize(buffer, encoding="utf-8")
         serialized = buffer.getvalue().decode("utf-8")
     else:
-        canonical = to_canonical_graph(graph)
-        # Non-Turtle fallback formats keep rdflib's native namespace behavior;
-        # deterministic QName preallocation is needed by Turtle serializers.
-        for prefix, namespace in graph.namespace_manager.namespaces():
-            canonical.namespace_manager.bind(prefix, namespace, replace=True)
+        # Copy into a clean single Graph, as the branch above does.
+        # ``to_canonical_graph`` returns a ReadOnlyGraphAggregate -- a
+        # ConjunctiveGraph subclass with a context-aware store and a fresh
+        # random identifier per call. Handing that straight to rdflib's
+        # serializers made some of them emit an empty document for a non-empty
+        # graph (``hext`` did), and put a dataset container into a serializer
+        # one function after ``_require_single_graph`` refused one at the door.
+        canonical = Graph(bind_namespaces="none")
+        for triple in to_canonical_graph(graph):
+            canonical.add(triple)
+        prepare_namespaces(canonical, graph)
         # This library accepts more aliases than rdflib registers plugins for
         # -- ``n-triples``, ``n-quads`` and ``rdf/xml`` are ours, not rdflib's,
         # and its lookup is exact. Translate every mapped alias to the name
@@ -405,9 +412,36 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
             if ox_target is not None
             else output_format
         )
-        serialized = canonical.serialize(format=serializer_format)
+        try:
+            serialized = canonical.serialize(format=serializer_format)
+        except PluginException:
+            # rdflib's own "no such format" error, which the public contract
+            # documents as propagating.
+            raise
+        except Exception as exc:
+            raise ValueError(
+                f"cannot serialize this graph as {output_format!r}: {exc}. This graph "
+                "took the fallback path because pyoxigraph could not parse it, and "
+                f"rdflib's {serializer_format!r} serializer cannot represent it either. "
+                "turtle, ttl, trig and n3 can carry any graph that reaches this path."
+            ) from exc
+        if not serialized.strip() and len(canonical) > 0:
+            # A delegated serializer that writes nothing for a non-empty graph
+            # is silent total loss; refuse rather than return it.
+            raise ValueError(
+                f"rdflib's {serializer_format!r} serializer produced an empty document for a "
+                f"graph of {len(canonical)} triples. Use turtle, ttl, trig or n3, which "
+                "carry any graph that reaches the fallback path."
+            )
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
-        lines = [line for line in serialized.splitlines() if line.strip()]
+        # Split on newlines only, never with ``str.splitlines()``: that also
+        # breaks on the Unicode line separators (U+2028, U+0085, U+000B and
+        # friends) which N-Triples permits *raw* inside a quoted literal, so a
+        # single statement became two "lines", they sorted independently, and
+        # the separator was rewritten as a newline -- corrupting the value and
+        # leaving a document that would not parse. rdflib escapes \n and \r,
+        # so a bare newline can only be a statement boundary.
+        lines = [line for line in serialized.split("\n") if line.strip()]
         return "\n".join(sorted(lines)) + "\n"
     return serialized
 

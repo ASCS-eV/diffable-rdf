@@ -82,6 +82,21 @@ affected artifact, commit it once, and subsequent runs are stable again.
 
 ### Fixed
 
+- **A literal containing a Unicode line separator no longer corrupts
+  line-oriented fallback output.** N-Triples permits U+2028, U+2029, U+0085,
+  U+000B, U+000C and U+001C-1E raw inside a quoted literal, and the sort used
+  `str.splitlines()`, which breaks on all of them: one statement became two
+  lines, they sorted independently, the separator was rewritten as a newline,
+  and the document no longer parsed.
+- **A delegated format no longer returns an empty document for a non-empty
+  graph.** `hext` did. Every fallback format now serializes from a clean single
+  graph rather than from the dataset container `to_canonical_graph` returns,
+  and an empty result for a non-empty graph is refused rather than returned.
+- **A serializer error on the fallback path names the format and a way
+  forward** instead of surfacing rdflib's raw message. RDF/XML with a literal
+  predicate reported only `Can't split 'literal-predicate'`; the original
+  error is still chained.
+
 - **`deterministic_turtle` no longer raises for a NaN or infinite number.**
   Every `xsd:double`/`xsd:float` NaN, `INF` and `-INF` literal previously
   failed with "this is a bug in diffable-rdf", because rdflib's literal
