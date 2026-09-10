@@ -20,7 +20,7 @@ References
 ----------
 .. [1] W3C (2024). "RDF Dataset Canonicalization." W3C Recommendation,
    21 May 2024.  Defines the RDFC-1.0 algorithm.
-   https://www.w3.org/TR/rdf-canon/
+   https://www.w3.org/TR/2024/REC-rdf-canon-20240521/
 .. [2] Weisfeiler, B. & Leman, A. (1968). "The reduction of a graph to
    canonical form and the algebra which appears therein."
 """

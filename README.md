@@ -9,7 +9,7 @@ blank-node churn.
 RDF serializers number blank nodes (`_:c14nN`, `_:Nb1e2…`) in a
 process-dependent order, so regenerating a file can rewrite most of it even
 when nothing semantically changed. `diffable-rdf` canonicalizes the graph with
-[RDFC-1.0](https://www.w3.org/TR/rdf-canon/), replaces the canonical sequential
+[RDFC-1.0](https://www.w3.org/TR/2024/REC-rdf-canon-20240521/), replaces the canonical sequential
 labels with Weisfeiler-Lehman structural hashes that depend only on each blank
 node's neighbourhood, and re-serializes through rdflib for idiomatic output.
 Every triple is preserved; only syntactic form changes.
@@ -56,7 +56,7 @@ in another order, or with the blank nodes renamed — produces the same bytes.
 | Function | Use it for |
 |---|---|
 | `deterministic_turtle(graph)` | Diff-stable, idiomatic Turtle. The default choice for files kept in version control. |
-| `canonicalize_rdf_graph(graph, output_format="turtle")` | A canonical form in another format: N-Triples, N-Quads, RDF/XML, TriG, N3, JSON-LD. Its Turtle is laid out differently from `deterministic_turtle`'s — same terms, different presentation. |
+| `canonicalize_rdf_graph(graph, output_format="turtle")` | Deterministic serialization using RDFC-1.0 blank-node labels: N-Triples, N-Quads, RDF/XML, TriG, N3, JSON-LD. Its Turtle is laid out differently from `deterministic_turtle`'s — same terms, different presentation. |
 | `deterministic_json(obj)` | Ordering an existing JSON or JSON-LD document, without touching RDF. |
 | `well_known_prefix_map()` | Normalizing prefix aliases (`sdo` → `schema`) to rdflib's curated names. |
 | `wl_blank_node_labels(quads)` | Diff-stable labels for blank nodes in quads you have already canonicalized. |
@@ -66,6 +66,12 @@ Full signatures, error cases and per-format behavior are in the
 [API guide](https://github.com/ASCS-eV/diffable-rdf/blob/main/docs/api.md).
 Changes that affect the bytes this library emits are listed in the
 [changelog](https://github.com/ASCS-eV/diffable-rdf/blob/main/CHANGELOG.md).
+
+The [standards profile and pinned originals](https://github.com/ASCS-eV/diffable-rdf/blob/main/docs/standards/README.md) distinguish
+RDF term fidelity from project-specific presentation. These graph serializers
+use the dependency's RDFC-1.0 labeling algorithm; their output is not advertised
+as standardized canonical N-Quads bytes or a standalone RDFC processor interface.
+WL labels and JSON ordering are project features, not additional RDF standards.
 
 ## Limits worth knowing before you start
 

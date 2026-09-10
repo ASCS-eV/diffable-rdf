@@ -147,14 +147,14 @@ def _canonical_dataset_form(dataset: pyoxigraph.Dataset) -> str:
 
 
 def _rdfc_canonical_form(graph: Graph) -> str | None:
-    """Return the RDFC-1.0 canonical N-Triples of ``graph``, as sorted lines.
+    """Return a sorted RDF term comparison key after RDFC-1.0 labeling.
 
-    RDFC-1.0 is a canonical form: two graphs are isomorphic exactly when
-    their canonical serializations are identical.  Comparing these strings
-    is therefore an exact isomorphism test, and — unlike
-    ``rdflib.compare.isomorphic``, which canonicalizes in Python — it runs
-    in pyoxigraph's Rust implementation, which the pipeline already invokes
-    in phase 1.
+    For the representable RDF graph terms, canonical blank-node labels and
+    sorted term strings provide an isomorphism comparison. These internal
+    strings are not the standardized canonical N-Quads byte representation.
+    Labeling runs in pyoxigraph's Rust implementation, which the pipeline
+    already invokes in phase 1, rather than the Python canonicalization
+    used by ``rdflib.compare.isomorphic``.
 
     Returns ``None`` when the graph cannot be represented in pyoxigraph at
     all (non-standard RDF such as literal predicates).  Callers treat that
@@ -170,7 +170,7 @@ def _rdfc_canonical_form(graph: Graph) -> str | None:
 
 
 def _rdfc_canonical_text(data: str, rdf_format: pyoxigraph.RdfFormat) -> str:
-    """Return the exact RDFC-1.0 form of serialized RDF text."""
+    """Return the internal labeled-term comparison key of serialized RDF text."""
     dataset = pyoxigraph.Dataset(pyoxigraph.parse(data, format=rdf_format))
     return _canonical_dataset_form(dataset)
 
@@ -235,12 +235,12 @@ def deterministic_turtle(graph: Graph) -> str:
     ----------
     .. [1] W3C (2024). "RDF Dataset Canonicalization." W3C Recommendation,
        21 May 2024.  Defines the RDFC-1.0 algorithm.
-       https://www.w3.org/TR/rdf-canon/
+       https://www.w3.org/TR/2024/REC-rdf-canon-20240521/
     .. [2] W3C (2014). "RDF 1.1 Turtle — Terse RDF Triple Language."
-       W3C Recommendation.  https://www.w3.org/TR/turtle/
+       W3C Recommendation.  https://www.w3.org/TR/2014/REC-turtle-20140225/
     .. [3] W3C (2014). "RDF 1.1 Concepts and Abstract Syntax", §3.3 Literals
        (literal term equality) and §3.6 Graph Comparison (isomorphism).
-       W3C Recommendation.  https://www.w3.org/TR/rdf11-concepts/
+       W3C Recommendation.  https://www.w3.org/TR/2014/REC-rdf11-concepts-20140225/
     """
     _require_single_graph(graph)
 

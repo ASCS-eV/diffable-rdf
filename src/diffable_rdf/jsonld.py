@@ -10,12 +10,14 @@ from dataclasses import dataclass
 # never be sorted.  An ``@context`` array is processed in order, each entry
 # overriding the last -- the JSON-LD 1.1 API's Context Processing Algorithm
 # (§4.1) wraps a non-array local context in an array at step 4 and iterates it
-# at step 5: https://www.w3.org/TR/json-ld11-api/#context-processing-algorithm
-# ``@list`` is *the* ordered container (JSON-LD 1.1 §4.3.1).
+# at step 5: https://www.w3.org/TR/2020/REC-json-ld11-api-20200716/#context-processing-algorithm
+# ``@list`` is the ordered container (normative JSON-LD 1.1 §9.7):
+# https://www.w3.org/TR/2020/REC-json-ld11-20200716/#lists-and-sets
 #
 # ``@graph`` and ``@set`` are deliberately absent. JSON-LD arrays are unordered
 # unless a container says otherwise, and ``@set`` expresses an unordered set of
-# data (§1.7; §4.3.2), so their arrays are sorted deterministically.
+# data (§9.7), so their arrays are sorted deterministically. The explanation
+# in §4.3 Value Ordering is informative, not the normative definition.
 _ORDERED_JSONLD_KEYWORDS: frozenset[str] = frozenset({"@context", "@list"})
 
 # What ``preserve_list_order_keys`` defaults to. This is a superset of the
@@ -338,7 +340,7 @@ def deterministic_json(
             # An array nested directly inside an ordered array is ordered
             # too: it expands to a nested list, not to a fresh unordered
             # value, so its order reaches the RDF as list structure just the
-            # same (``@list`` is *the* ordered container, JSON-LD 1.1 §4.3.1).
+            # same (``@list`` is the ordered container, JSON-LD 1.1 §9.7).
             # Carry the protection into array items only -- a dict starts a
             # fresh node object, which is the documented point where sorting
             # resumes.

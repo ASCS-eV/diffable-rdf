@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "references": [
+    {
+      "id": "RDF11-CONCEPTS",
+      "title": "RDF 1.1 Concepts and Abstract Syntax",
+      "edition": "25 February 2014",
+      "publication_date": "2014-02-25",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2014/REC-rdf11-concepts-20140225/",
+      "resolved_url": "https://www.w3.org/TR/2014/REC-rdf11-concepts-20140225/",
+      "path": "references/rdf11-concepts.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "3838c992097f72ee8784b6c96194d9879f86f2e08f53ced5a05aa4031750c5ac",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": [
+        {
+          "id": "section-graph-equality",
+          "section": "3.6 Graph Comparison",
+          "normative": true
+        },
+        {
+          "id": "section-Graph-Literal",
+          "section": "3.3 Literals",
+          "normative": true
+        },
+        {
+          "id": "section-triples",
+          "section": "3.1 Triples",
+          "normative": true
+        }
+      ]
+    },
+    {
+      "id": "RDFC10",
+      "title": "RDF Dataset Canonicalization",
+      "edition": "21 May 2024",
+      "publication_date": "2024-05-21",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2024/REC-rdf-canon-20240521/",
+      "resolved_url": "https://www.w3.org/TR/2024/REC-rdf-canon-20240521/",
+      "path": "references/rdf-canon.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "330eb4f00c5f12300e23cb7a7b979bdfc910890a41bfb87a93327d7b43161fd0",
+      "license_ids": [
+        "W3C-SOFTWARE-DOCUMENT-2023"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": [
+        {
+          "id": "conformance",
+          "section": "2 Conformance",
+          "normative": true
+        },
+        {
+          "id": "canon-terms",
+          "section": "3.1 Terms defined by this specification",
+          "normative": true
+        },
+        {
+          "id": "canonical-quads",
+          "section": "A A Canonical form of N-Quads",
+          "normative": true
+        }
+      ]
+    },
+    {
+      "id": "TURTLE11",
+      "title": "RDF 1.1 Turtle",
+      "edition": "25 February 2014",
+      "publication_date": "2014-02-25",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2014/REC-turtle-20140225/",
+      "resolved_url": "https://www.w3.org/TR/2014/REC-turtle-20140225/",
+      "path": "references/turtle.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "f1ff33edbd9dbac6a472e001064ef70b4aee849972f3d8b5afa837b5f9cc6580",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": []
+    },
+    {
+      "id": "TRIG11",
+      "title": "RDF 1.1 TriG",
+      "edition": "25 February 2014",
+      "publication_date": "2014-02-25",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2014/REC-trig-20140225/",
+      "resolved_url": "https://www.w3.org/TR/2014/REC-trig-20140225/",
+      "path": "references/trig.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "90125fee148e9ade1682649cd2f4fe82c45640445dd1ffca3fb8651b4fe1f7e1",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": []
+    },
+    {
+      "id": "NTRIPLES11",
+      "title": "RDF 1.1 N-Triples",
+      "edition": "25 February 2014",
+      "publication_date": "2014-02-25",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2014/REC-n-triples-20140225/",
+      "resolved_url": "https://www.w3.org/TR/2014/REC-n-triples-20140225/",
+      "path": "references/n-triples.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "c1b0128244a787b408f5ec6f9a45ac148b998191f5a4341c1979a397722ac036",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": []
+    },
+    {
+      "id": "NQUADS11",
+      "title": "RDF 1.1 N-Quads",
+      "edition": "25 February 2014",
+      "publication_date": "2014-02-25",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2014/REC-n-quads-20140225/",
+      "resolved_url": "https://www.w3.org/TR/2014/REC-n-quads-20140225/",
+      "path": "references/n-quads.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "0e0f395f9956e97cc4477a54c07c69747a4a8ecfc29d6d9ccabb9b662c8efc91",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": []
+    },
+    {
+      "id": "RDFXML11",
+      "title": "RDF 1.1 XML Syntax",
+      "edition": "25 February 2014",
+      "publication_date": "2014-02-25",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2014/REC-rdf-syntax-grammar-20140225/",
+      "resolved_url": "https://www.w3.org/TR/2014/REC-rdf-syntax-grammar-20140225/",
+      "path": "references/rdf-syntax-grammar.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "69693f6e9cc399589f8e6f3f08d60e908a38effdb9a2745c70b0f0752fd2f7e5",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": []
+    },
+    {
+      "id": "JSONLD11",
+      "title": "JSON-LD 1.1",
+      "edition": "16 July 2020",
+      "publication_date": "2020-07-16",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2020/REC-json-ld11-20200716/",
+      "resolved_url": "https://www.w3.org/TR/2020/REC-json-ld11-20200716/",
+      "path": "references/json-ld11.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "9e2c9972d0f60bc744e975731643a9a63d410afc6b682eb8898ad2720e452866",
+      "license_ids": [
+        "W3C-SOFTWARE-DOCUMENT-2015"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": [
+        {
+          "id": "lists-and-sets",
+          "section": "9.7 Lists and Sets",
+          "normative": true
+        },
+        {
+          "id": "sets-and-lists",
+          "section": "4.3 Value Ordering",
+          "normative": false
+        },
+        {
+          "id": "conformance",
+          "section": "2 Conformance",
+          "normative": true
+        }
+      ]
+    },
+    {
+      "id": "JSONLD11-API",
+      "title": "JSON-LD 1.1 Processing Algorithms and API",
+      "edition": "16 July 2020",
+      "publication_date": "2020-07-16",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2020/REC-json-ld11-api-20200716/",
+      "resolved_url": "https://www.w3.org/TR/2020/REC-json-ld11-api-20200716/",
+      "path": "references/json-ld11-api.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "380ddb64232c701a8ff969e22646451e20fe66d264e34a5bc4c5b018e8c77f55",
+      "license_ids": [
+        "W3C-SOFTWARE-DOCUMENT-2015"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": [
+        {
+          "id": "context-processing-algorithm",
+          "section": "4.1 Context Processing Algorithm",
+          "normative": true
+        },
+        {
+          "id": "create-term-definition",
+          "section": "4.2 Create Term Definition",
+          "normative": true
+        },
+        {
+          "id": "conformance",
+          "section": "3 Conformance",
+          "normative": true
+        }
+      ]
+    },
+    {
+      "id": "XML10",
+      "title": "Extensible Markup Language (XML) 1.0 (Fifth Edition)",
+      "edition": "26 November 2008",
+      "publication_date": "2008-11-26",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2008/REC-xml-20081126/",
+      "resolved_url": "https://www.w3.org/TR/2008/REC-xml-20081126/",
+      "path": "references/xml.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "f58a4b9e1e5b8bac13fb55c4e5c7c8c5e2c176aa45ee68e2f1ab2498511927ec",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": [
+        {
+          "id": "charsets",
+          "section": "2.2 Characters",
+          "normative": true
+        },
+        {
+          "id": "sec-line-ends",
+          "section": "2.11 End-of-Line Handling",
+          "normative": true
+        }
+      ]
+    },
+    {
+      "id": "XMLNS10",
+      "title": "Namespaces in XML 1.0 (Third Edition)",
+      "edition": "8 December 2009",
+      "publication_date": "2009-12-08",
+      "status": "W3C Recommendation",
+      "source_url": "https://www.w3.org/TR/2009/REC-xml-names-20091208/",
+      "resolved_url": "https://www.w3.org/TR/2009/REC-xml-names-20091208/",
+      "path": "references/xml-names.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "b4a649e5fdab9852d68eca21442481599164949bcdee5549f2ec7e38fb3cd3a8",
+      "license_ids": [
+        "W3C-DOCUMENT-2002",
+        "W3C-DOCUMENT-RESOLVED"
+      ],
+      "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
+      "anchors": [
+        {
+          "id": "ns-qualnames",
+          "section": "4 Qualified Names",
+          "normative": true
+        }
+      ]
+    },
+    {
+      "id": "RFC3986",
+      "title": "Uniform Resource Identifier (URI): Generic Syntax",
+      "edition": "January 2005",
+      "publication_date": "2005-01",
+      "status": "Standards Track",
+      "source_url": "https://www.rfc-editor.org/rfc/rfc3986.txt",
+      "resolved_url": "https://www.rfc-editor.org/rfc/rfc3986.txt",
+      "path": "references/rfc3986.txt",
+      "media_type": "text/plain",
+      "retrieved_at": "2026-09-10",
+      "sha256": "3102dae4b68cebe40337730312fcb612297b8928547267e8b3d1ee6002b2d683",
+      "license_ids": [
+        "BCP78-2004"
+      ],
+      "notice": "Complete Copyright Notice and Full Copyright Statement where present are retained in the unmodified RFC.",
+      "anchors": []
+    },
+    {
+      "id": "RFC3987",
+      "title": "Internationalized Resource Identifiers (IRIs)",
+      "edition": "January 2005",
+      "publication_date": "2005-01",
+      "status": "Standards Track",
+      "source_url": "https://www.rfc-editor.org/rfc/rfc3987.txt",
+      "resolved_url": "https://www.rfc-editor.org/rfc/rfc3987.txt",
+      "path": "references/rfc3987.txt",
+      "media_type": "text/plain",
+      "retrieved_at": "2026-09-10",
+      "sha256": "7cc9e3c4e61ea326130d29d959b723209fe3a6c75cdcfb5badbd315d96cd7878",
+      "license_ids": [
+        "BCP78-2004"
+      ],
+      "notice": "Complete Copyright Notice and Full Copyright Statement where present are retained in the unmodified RFC.",
+      "anchors": []
+    },
+    {
+      "id": "RFC8259",
+      "title": "The JavaScript Object Notation (JSON) Data Interchange Format",
+      "edition": "December 2017",
+      "publication_date": "2017-12",
+      "status": "Standards Track",
+      "source_url": "https://www.rfc-editor.org/rfc/rfc8259.txt",
+      "resolved_url": "https://www.rfc-editor.org/rfc/rfc8259.txt",
+      "path": "references/rfc8259.txt",
+      "media_type": "text/plain",
+      "retrieved_at": "2026-09-10",
+      "sha256": "61a5378f4255c720beb2a4b4a63b29540147c140f36988bf086291989b4cd2d7",
+      "license_ids": [
+        "IETF-LICENSE-INDEX",
+        "IETF-TLP5"
+      ],
+      "notice": "Complete Copyright Notice and Full Copyright Statement where present are retained in the unmodified RFC.",
+      "anchors": []
+    }
+  ],
+  "licenses": [
+    {
+      "id": "W3C-DOCUMENT-2002",
+      "title": "Document license - 2002 version",
+      "source_url": "https://www.w3.org/copyright/document-license-2002/",
+      "resolved_url": "https://www.w3.org/copyright/document-license-2002/",
+      "path": "references/w3c-document-license-2002.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "62e6df0a226bfed9de8996e4e896113cdfb33cb33f80038e56f761abdc70d8f5",
+      "notice": "Document-use terms active from 31 December 2002; originals retain copyright, status and source links."
+    },
+    {
+      "id": "W3C-DOCUMENT-RESOLVED",
+      "title": "Document license - 2023 version",
+      "source_url": "https://www.w3.org/Consortium/Legal/copyright-documents",
+      "resolved_url": "https://www.w3.org/copyright/document-license-2023/",
+      "path": "references/w3c-document-license.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "4bc849ad8fc856e93478400332f409d209bdb7ab3ec0f346e88e9c23b6d2b9ae",
+      "notice": "Resolved destination of the original document-use link on the retrieval date; not presented as the publication-era text."
+    },
+    {
+      "id": "W3C-SOFTWARE-DOCUMENT-2015",
+      "title": "Software and Document license - 2015 version",
+      "source_url": "https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document",
+      "resolved_url": "https://www.w3.org/copyright/software-license-2015/",
+      "path": "references/w3c-software-document-2015.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "254f76f6eb153b1a874645015489f24844fe117585a422f9f53ea3f359806919",
+      "notice": "Permissive license explicitly linked by both JSON-LD 2020 Recommendations."
+    },
+    {
+      "id": "W3C-SOFTWARE-DOCUMENT-2023",
+      "title": "Software and Document license - 2023 version",
+      "source_url": "https://www.w3.org/copyright/software-license-2023/",
+      "resolved_url": "https://www.w3.org/copyright/software-license-2023/",
+      "path": "references/w3c-software-document-2023.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "ec32c12624d9dc038328872f288355f9e3ff59f2c1ab575c631868eb894415c1",
+      "notice": "Permissive license explicitly linked by the RDFC 2024 Recommendation."
+    },
+    {
+      "id": "BCP78-2004",
+      "title": "IETF Rights in Contributions",
+      "source_url": "https://www.rfc-editor.org/rfc/rfc3667.txt",
+      "resolved_url": "https://www.rfc-editor.org/rfc/rfc3667.txt",
+      "path": "references/rfc3667.txt",
+      "media_type": "text/plain",
+      "retrieved_at": "2026-09-10",
+      "sha256": "f01b0192e5865b77f18f52a2d1afa11cf22b8c06c0d1769d37ecd72e7aa52adc",
+      "notice": "RFC 3667, BCP 78, February 2004; rights and permissions in section 3.3 and required notices in section 5. RFC 3986 and RFC 3987 retain their complete embedded notices."
+    },
+    {
+      "id": "IETF-LICENSE-INDEX",
+      "title": "Trust Legal Provisions",
+      "source_url": "https://trustee.ietf.org/license-info",
+      "resolved_url": "https://trustee.ietf.org/documents/trust-legal-provisions/",
+      "path": "references/ietf-license-info.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "e0350a0a6272f4cb8de5359cefec783fc3eba55ea2d2b7c3ffb603231508803f",
+      "notice": "Resolved destination of the license-info link printed in RFC 8259; index provenance only, not the license text."
+    },
+    {
+      "id": "IETF-TLP5",
+      "title": "Trust Legal Provisions",
+      "source_url": "https://trustee.ietf.org/documents/trust-legal-provisions/tlp-5/",
+      "resolved_url": "https://trustee.ietf.org/documents/trust-legal-provisions/tlp-5/",
+      "path": "references/ietf-tlp-5.html",
+      "media_type": "text/html",
+      "retrieved_at": "2026-09-10",
+      "sha256": "c63e5191b6909115beb3ebbed489c24f600d0b7afc8420f43b8fa337eb489a78",
+      "notice": "TLP 5.0, effective 25 March 2015; this original publisher page includes the 21 September 2021 clerical correction of the BSD license name. Section 3.c permits copying unmodified documents outside the IETF Standards Process; all RFC 8259 notices are retained."
+    }
+  ]
+}

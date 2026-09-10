@@ -17,7 +17,7 @@ See ``docs/api.md`` for the full contract.
    ``Literal("x", datatype=XSD.string)``.  This is an equivalence, not a
    normalization: RDF 1.1 Concepts §3.3 compares lexical forms character by
    character, so every *other* typed lexical form is preserved exactly.
-   https://www.w3.org/TR/rdf11-concepts/#section-Graph-Literal
+   https://www.w3.org/TR/2014/REC-rdf11-concepts-20140225/#section-Graph-Literal
 
 2. **Non-standard RDF**: Graphs with relative IRIs or generalized RDF terms
    are rejected by pyoxigraph. This function uses a deterministic rdflib
@@ -586,8 +586,9 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     """Raise if ``serialized`` does not say the same thing as ``source``.
 
     A canonical form that does not round-trip is worse than none: it
-    silently rewrites the graph.  This function compares RDFC-1.0 canonical
-    forms, which is an exact isomorphism test, and is skipped when the
+    silently rewrites the graph. This function compares sorted RDF term
+    strings after RDFC-1.0 labeling, not standardized canonical N-Quads bytes.
+    This graph-isomorphism comparison is skipped when the
     source graph is not representable in pyoxigraph (the degraded path,
     which deliberately passes relative IRIs through verbatim and so cannot
     be compared this way).
@@ -684,6 +685,9 @@ def canonicalize_rdf_graph(
 
     The graph is transferred to pyoxigraph via N-Triples, canonicalized
     with RDFC-1.0, sorted, and serialized back to the requested format.
+    RDFC-1.0 supplies blank-node labels; syntax-specific rendering is not a
+    claim of standardized canonical N-Quads bytes or a standalone RDFC
+    processor interface. See docs/standards/README.md for the exact profile.
     Prefix bindings are optional presentation for formats that support them
     (Turtle, TriG, N3, RDF/XML). A binding is retained when its rendering
     verifies; otherwise complete IRIs preserve the graph terms.
