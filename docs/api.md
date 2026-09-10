@@ -249,7 +249,9 @@ compacted into `@list` and no blank node is inlined, so shared list cells and
 cycles keep their identity. Within that fallback:
 
 - Relative IRIs in subject and object position are kept verbatim, and resolve
-  when a consumer parses with a document base.
+  when a consumer parses with a document base, except identifier strings that
+  exactly match `@[A-Za-z]+`. JSON-LD reserves those strings, so the fallback raises
+  `ValueError` rather than placing one in an `@id` value.
 - Predicate and datatype IRIs must be absolute. rdflib's JSON-LD parser drops
   relative ones, so emitting their text would not preserve their meaning.
 - A literal or blank-node predicate, a literal subject, any other node kind,

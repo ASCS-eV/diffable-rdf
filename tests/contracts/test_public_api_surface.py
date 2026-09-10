@@ -84,7 +84,7 @@ def test_both_dependencies_are_loaded_before_any_public_call_can_be_made() -> No
 
 
 def test_the_version_has_a_changelog_section() -> None:
-    """The current package version has the leading changelog section."""
+    """The current package version has the leading released changelog section."""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[2]
@@ -95,6 +95,8 @@ def test_the_version_has_a_changelog_section() -> None:
         f"{diffable_rdf.__version__}"
     )
     headings = [line for line in changelog.splitlines() if line.startswith("## [")]
+    if headings[0] == "## [Unreleased]":
+        headings = headings[1:]
     assert headings[0].startswith(f"## [{diffable_rdf.__version__}]"), (
-        f"the newest changelog section is {headings[0]!r}, not the current version"
+        f"the leading released changelog section is {headings[0]!r}, not the current version"
     )

@@ -10,6 +10,14 @@ likely to matter to you: it shows up as one large diff the next time you
 regenerate a committed artifact. Every such change is listed with what to do
 about it.
 
+## [Unreleased]
+
+### Changed
+
+- Degraded JSON-LD rejects a relative subject or object identifier exactly
+  matching `@[A-Za-z]+`. JSON-LD reserves these strings, so returning them in an `@id`
+  value can change or discard a graph term.
+
 ## [0.3.0] - 2026-09-10
 
 Two kinds of change here, and the difference matters when you upgrade.

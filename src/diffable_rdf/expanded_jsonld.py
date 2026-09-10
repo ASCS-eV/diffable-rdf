@@ -18,6 +18,7 @@ from rdflib.term import Node
 from .jsonld import deterministic_json
 
 _ABSOLUTE_IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+_RESERVED_JSONLD_IDENTIFIER = re.compile(r"^@[A-Za-z]+$")
 
 
 def _is_absolute_iri(value: str) -> bool:
@@ -49,6 +50,12 @@ def _iri_identifier(term: URIRef, position: str, *, require_absolute: bool) -> s
         raise ValueError(
             "degraded JSON-LD interoperable RDF subset does not accept a URIRef beginning with '_:' "
             f"in {position} position: {value!r}"
+        )
+    if _RESERVED_JSONLD_IDENTIFIER.fullmatch(value):
+        raise ValueError(
+            "degraded JSON-LD does not accept a reserved JSON-LD identifier "
+            f"in {position} position: {value!r}; identifiers matching '@' followed only "
+            "by ASCII letters are reserved"
         )
     if require_absolute and not _is_absolute_iri(value):
         raise ValueError(

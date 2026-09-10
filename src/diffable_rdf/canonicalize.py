@@ -22,7 +22,8 @@ See ``docs/api.md`` for the full contract.
 2. **Non-standard RDF**: Graphs with relative IRIs or generalized RDF terms
    are rejected by pyoxigraph. This function uses a deterministic rdflib
    fallback with format-specific policies. Degraded JSON-LD emits an
-   interoperable standard-RDF subset and rejects terms outside that subset.
+   interoperable standard-RDF subset and rejects terms outside that subset,
+   including identifier strings JSON-LD reserves.
 
 3. **Numeric short forms**: pyoxigraph uses Turtle short forms for
    ``xsd:integer`` (``42``), ``xsd:boolean`` (``true``), and
@@ -792,8 +793,8 @@ def canonicalize_rdf_graph(
 
     Graphs containing terms pyoxigraph cannot parse take a deterministic
     rdflib-based fallback. Degraded JSON-LD preserves relative subject and
-    object IRIs verbatim, while term positions outside its interoperable
-    standard-RDF subset raise ``ValueError``.
+    object IRIs verbatim, except identifiers exactly matching ``@[A-Za-z]+`` that
+    JSON-LD reserves; unsupported terms raise ``ValueError``.
 
     :param graph: A single rdflib Graph to serialize. Dataset and
         ConjunctiveGraph containers are not supported; select an individual
