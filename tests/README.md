@@ -6,6 +6,7 @@ coupling independent concerns.
 
 | Group | Responsibility | Primary dimensions |
 | --- | --- | --- |
+| `harness/` | Test-target selection and child-process isolation | source and wheel provenance, interpreter configuration |
 | `contracts/` | Public API, accepted graph inputs, format names, and output framing | exports, annotations, input coercion, format guarantees |
 | `serialization/` | RDF document fidelity and serializer fallbacks | bases, namespaces, literals, XML, list identity, process determinism |
 | `properties/` | Seeded graph invariants | losslessness, idempotence, label independence, insertion-order independence |
@@ -25,17 +26,25 @@ Run the source tree suite with:
 
 ```bash
 uv sync --locked --group dev
-PYTHONPATH=src uv run --frozen pytest -q --cov=diffable_rdf --cov-report=term-missing --cov-fail-under=95
+uv run --frozen pytest -q --package-under-test=source --cov=diffable_rdf --cov-report=term-missing --cov-fail-under=95
 ```
 
-Source-tree execution imports `src/diffable_rdf` directly and validates the
-working files. Distribution verification requires imports in the test process
-and every child process to resolve to the installed package. Source and
-distribution origins must be checked separately; distribution verification uses
-a built wheel or source archive in an environment without the source package.
+`--package-under-test=source` imports this checkout's `src/diffable_rdf`.
+`--package-under-test=installed` requires a non-editable installed wheel and
+verifies that pytest and every child interpreter use its recorded package file.
+Child interpreters run from a temporary directory with user site packages
+disabled; their selected hash seed is retained.
+
+From a neutral directory outside the checkout, run the installed-wheel suite
+with that wheel environment's Python:
+
+```bash
+/path/to/wheel-env/bin/python -I -m pytest -q --package-under-test=installed \
+  -c /path/to/diffable-rdf/pyproject.toml /path/to/diffable-rdf/tests
+```
 
 Run focused groups with standard pytest selection, for example:
 
 ```bash
-PYTHONPATH=src uv run --frozen pytest -q tests/serialization tests/wl
+uv run --frozen pytest -q --package-under-test=source tests/serialization tests/wl
 ```

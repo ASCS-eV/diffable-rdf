@@ -38,7 +38,7 @@ jobs:
 
       - name: Run tests
         # Enforce the project's minimum statement coverage.
-        run: uv run --frozen pytest -q --cov=diffable_rdf --cov-report=term-missing --cov-fail-under=95
+        run: uv run --frozen pytest -q --package-under-test=source --cov=diffable_rdf --cov-report=term-missing --cov-fail-under=95
 
   minimum-versions:
     # The `test` job runs `uv run --frozen`, pinning everything to uv.lock, so
@@ -68,12 +68,11 @@ jobs:
         run: uv pip list
 
       - name: Run tests
-        run: .venv/bin/python -m pytest -q
+        run: .venv/bin/python -m pytest -q --package-under-test=source
 
   wheel:
-    # The `test` job imports the package from `src/` via pytest's pythonpath,
-    # so nothing there exercises what the wheel actually contains. A missing
-    # module or a missing `py.typed` is invisible until someone installs it.
+    # The wheel job verifies its installed distribution independently of the
+    # source-tree test target.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -96,11 +95,13 @@ jobs:
           uv pip install "$(ls dist/*.whl)" "pytest>=8.0"
 
       - name: Run the suite against the installed wheel
-        # `-o pythonpath=` clears the `src/` entry from pyproject.toml, so the
-        # import resolves to the installed package and not to the working tree.
         run: |
-          .venv/bin/python -c "import diffable_rdf; print(diffable_rdf.__file__)"
-          .venv/bin/python -m pytest -q -o pythonpath= tests
+          workdir="$(mktemp -d)"
+          cd "$workdir"
+          "$GITHUB_WORKSPACE/.venv/bin/python" -I -m pytest -q \
+            --package-under-test=installed \
+            -c "$GITHUB_WORKSPACE/pyproject.toml" \
+            "$GITHUB_WORKSPACE/tests"
 
       - name: Check the wheel ships the typing marker
         # The package advertises inline types; without py.typed in the wheel a
@@ -138,7 +139,7 @@ jobs:
         run: uv pip list
 
       - name: Run tests
-        run: .venv/bin/python -m pytest -q
+        run: .venv/bin/python -m pytest -q --package-under-test=source
 
   other-platforms:
     # The package claims "Operating System :: OS Independent". One Python
@@ -161,4 +162,4 @@ jobs:
         run: uv sync --locked --group dev
 
       - name: Run tests
-        run: uv run --frozen pytest -q
+        run: uv run --frozen pytest -q --package-under-test=source

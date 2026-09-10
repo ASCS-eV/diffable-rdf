@@ -8,8 +8,6 @@ FastAPI, `typer`, `attrs`, `beartype` and every documentation generator call
 from __future__ import annotations
 
 import json
-import subprocess
-import sys
 import typing
 from collections.abc import Set as AbstractSet
 
@@ -67,14 +65,10 @@ def test_the_preserved_keys_argument_admits_any_set() -> None:
         assert json.loads(rendered) == expected, keys
 
 
-def test_both_dependencies_are_loaded_before_any_public_call_can_be_made() -> None:
+def test_both_dependencies_are_loaded_before_any_public_call_can_be_made(python_runner) -> None:
     """Importing the package loads both required RDF dependencies."""
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import diffable_rdf, sys; print('pyoxigraph' in sys.modules, 'rdflib' in sys.modules)",
-        ],
+    result = python_runner(
+        "import diffable_rdf, sys; print('pyoxigraph' in sys.modules, 'rdflib' in sys.modules)",
         capture_output=True,
         text=True,
         check=True,

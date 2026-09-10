@@ -8,9 +8,6 @@ lossless and deterministic.
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 import textwrap
 from xml.etree import ElementTree
 
@@ -55,7 +52,7 @@ def _degraded_graph() -> Graph:
 
 
 @pytest.mark.parametrize("output_format", ["xml", "rdf/xml"])
-def test_degraded_rdf_xml_is_byte_identical_across_processes(output_format: str) -> None:
+def test_degraded_rdf_xml_is_byte_identical_across_processes(python_runner, output_format: str) -> None:
     """Hash seeds, not repeats: the traversal is stable within one process."""
     script = BUILD + textwrap.dedent(
         """
@@ -65,10 +62,11 @@ def test_degraded_rdf_xml_is_byte_identical_across_processes(output_format: str)
         """
     )
     outputs = {
-        subprocess.run(
-            [sys.executable, "-c", script, output_format],
+        python_runner(
+            script,
+            output_format,
             capture_output=True, text=True, check=True,
-            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+            env={"PYTHONHASHSEED": str(seed)},
         ).stdout
         for seed in HASH_SEEDS
     }

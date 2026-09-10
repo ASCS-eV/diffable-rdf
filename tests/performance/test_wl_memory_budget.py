@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import subprocess
-import sys
 import textwrap
 
 import pytest
 
 
-def test_wl_signatures_stay_bounded_under_many_iterations() -> None:
+def test_wl_signatures_stay_bounded_under_many_iterations(python_runner) -> None:
     """Sixteen refinement iterations stay within the supported memory budget."""
     script = textwrap.dedent(
         """
@@ -42,7 +40,7 @@ def test_wl_signatures_stay_bounded_under_many_iterations() -> None:
         print("ok")
         """
     )
-    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=300)
+    result = python_runner(script, capture_output=True, text=True, timeout=300)
 
     if result.returncode == 77:
         pytest.skip("this platform cannot cap a process address space")

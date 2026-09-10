@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import subprocess
-import sys
 import textwrap
 
 
-def test_owl_shaped_graph_canonicalizes_within_a_time_budget() -> None:
+def test_owl_shaped_graph_canonicalizes_within_a_time_budget(python_runner) -> None:
     """An OWL-shaped graph with 8,400 triples canonicalizes within 30 seconds."""
     script = textwrap.dedent(
         """
@@ -32,7 +30,7 @@ def test_owl_shaped_graph_canonicalizes_within_a_time_budget() -> None:
         print("ok")
         """
     )
-    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=30)
+    result = python_runner(script, capture_output=True, text=True, timeout=30)
 
     assert result.returncode == 0, result.stderr[-500:]
     assert result.stdout.strip() == "ok"
