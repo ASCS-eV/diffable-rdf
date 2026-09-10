@@ -2,15 +2,88 @@
 
 from __future__ import annotations
 
+from urllib.parse import urljoin
+
 import pyoxigraph as ox
 import pytest
 import rdflib
 from rdflib import Graph, Literal, Namespace, URIRef
-from rdflib.namespace import XSD
+from rdflib.namespace import RDF, XSD
 
 from diffable_rdf import canonicalize_rdf_graph, deterministic_turtle
 
 EX = Namespace("http://example.org/")
+FALLBACK_BASE = "https://consumer.example/base/"
+
+
+def _boundary_literal_graph(subject: URIRef, line_ending: str) -> Graph:
+    """Build literals whose terminal delimiters exercise Turtle quoting."""
+    values = [
+        line_ending + "\\" * backslashes + '"' * quotes
+        for backslashes in range(4)
+        for quotes in range(1, 5)
+    ]
+    values.extend(
+        (
+            "before" + line_ending + '"""' + "after",
+            "terminal" + line_ending + "\\",
+        )
+    )
+
+    graph = Graph()
+    for index, value in enumerate(values):
+        predicate = EX[f"boundary-{index}"]
+        graph.add((subject, predicate, Literal(value)))
+        graph.add((subject, predicate, Literal(value, datatype=EX.literal, normalize=False)))
+        graph.add((subject, predicate, Literal(value, lang="en")))
+    return graph
+
+
+def _literal_identity(literal: Literal) -> tuple[str, str, str | None]:
+    """Return the RDF literal fields compared by a Turtle reader."""
+    if literal.language:
+        datatype = RDF.langString
+    else:
+        datatype = literal.datatype or XSD.string
+    return str(literal), str(datatype), literal.language
+
+
+def _parsed_literal_identities(dataset: ox.Dataset) -> set[tuple[str, str, str | None]]:
+    """Return lexical literal fields from an independently parsed dataset."""
+    return {
+        (quad.object.value, quad.object.datatype.value, quad.object.language)
+        for quad in dataset
+        if isinstance(quad.object, ox.Literal)
+    }
+
+
+def _assert_turtle_boundary_round_trip(
+    graph: Graph,
+    expected: Graph,
+    serializer,
+    rdf_format: ox.RdfFormat,
+    *,
+    base_iri: str | None = None,
+    uses_long_strings: bool | None,
+) -> None:
+    """Check repeated public output with an independent Turtle-family reader."""
+    before = set(graph)
+    first = serializer(graph)
+    second = serializer(graph)
+
+    assert first == second
+    assert set(graph) == before
+    if uses_long_strings is not None:
+        assert ('"""' in first) is uses_long_strings
+
+    parsed = ox.Dataset(ox.parse(first, format=rdf_format, base_iri=base_iri))
+    assert len(parsed) == len(expected)
+    assert _parsed_literal_identities(parsed) == {
+        _literal_identity(literal)
+        for _, _, literal in expected
+        if isinstance(literal, Literal)
+    }
+    assert _canonical_dataset(parsed) == _canonical_graph(expected)
 
 
 def _canonical_dataset(dataset: ox.Dataset) -> str:
@@ -205,3 +278,113 @@ def test_serialization_does_not_mutate_input_or_global_normalization() -> None:
     assert set(graph) == before_triples
     assert graph.base == before_base
     assert rdflib.NORMALIZE_LITERALS is before_normalize
+
+
+@pytest.mark.parametrize(
+    "line_ending",
+    ["\n", "\r", "\r\n"],
+    ids=["lf-long-string", "cr-short-string", "crlf-long-string"],
+)
+def test_deterministic_turtle_preserves_literal_quote_boundaries(line_ending: str) -> None:
+    """Terminal quote runs retain their literal fields on the canonical path."""
+    graph = _boundary_literal_graph(EX.subject, line_ending)
+
+    _assert_turtle_boundary_round_trip(
+        graph,
+        graph,
+        deterministic_turtle,
+        ox.RdfFormat.TURTLE,
+        uses_long_strings="\n" in line_ending,
+    )
+
+
+@pytest.mark.parametrize(
+    "output_format,rdf_format",
+    [
+        ("turtle", ox.RdfFormat.TURTLE),
+        ("ttl", ox.RdfFormat.TURTLE),
+        ("trig", ox.RdfFormat.TRIG),
+        ("n3", ox.RdfFormat.N3),
+    ],
+    ids=["turtle", "ttl", "trig", "n3"],
+)
+@pytest.mark.parametrize(
+    "line_ending",
+    ["\n", "\r", "\r\n"],
+    ids=["lf-long-string", "cr-short-string", "crlf-long-string"],
+)
+def test_turtle_aliases_preserve_literal_quote_boundaries(
+    output_format: str, rdf_format: ox.RdfFormat, line_ending: str
+) -> None:
+    """Every Turtle-family alias preserves literal terminal quote runs."""
+    graph = _boundary_literal_graph(EX.subject, line_ending)
+
+    _assert_turtle_boundary_round_trip(
+        graph,
+        graph,
+        lambda source: canonicalize_rdf_graph(source, output_format=output_format),
+        rdf_format,
+        uses_long_strings=None,
+    )
+
+
+@pytest.mark.parametrize(
+    "line_ending",
+    ["\n", "\r", "\r\n"],
+    ids=["lf-long-string", "cr-short-string", "crlf-long-string"],
+)
+def test_deterministic_turtle_fallback_preserves_literal_quote_boundaries(
+    line_ending: str,
+) -> None:
+    """The relative-IRI fallback keeps literal terminal quote runs parseable."""
+    subject = URIRef("relative/literal-subject")
+    graph = _boundary_literal_graph(subject, line_ending)
+    expected = _boundary_literal_graph(
+        URIRef(urljoin(FALLBACK_BASE, str(subject))),
+        line_ending,
+    )
+
+    _assert_turtle_boundary_round_trip(
+        graph,
+        expected,
+        deterministic_turtle,
+        ox.RdfFormat.TURTLE,
+        base_iri=FALLBACK_BASE,
+        uses_long_strings="\n" in line_ending,
+    )
+
+
+@pytest.mark.parametrize(
+    "output_format,rdf_format",
+    [
+        ("turtle", ox.RdfFormat.TURTLE),
+        ("ttl", ox.RdfFormat.TURTLE),
+        ("trig", ox.RdfFormat.TRIG),
+        ("n3", ox.RdfFormat.N3),
+    ],
+    ids=["turtle", "ttl", "trig", "n3"],
+)
+@pytest.mark.parametrize(
+    "line_ending",
+    ["\n", "\r", "\r\n"],
+    ids=["lf-long-string", "cr-short-string", "crlf-long-string"],
+)
+def test_turtle_alias_fallbacks_preserve_literal_quote_boundaries(
+    output_format: str, rdf_format: ox.RdfFormat, line_ending: str
+) -> None:
+    """Every Turtle-family fallback resolves relative subjects at the reader base."""
+    subject = URIRef("relative/literal-subject")
+    graph = _boundary_literal_graph(subject, line_ending)
+    expected = _boundary_literal_graph(
+        URIRef(urljoin(FALLBACK_BASE, str(subject))),
+        line_ending,
+    )
+
+    _assert_turtle_boundary_round_trip(
+        graph,
+        expected,
+        lambda source: canonicalize_rdf_graph(source, output_format=output_format),
+        rdf_format,
+        base_iri=FALLBACK_BASE,
+        uses_long_strings="\n" in line_ending,
+    )
