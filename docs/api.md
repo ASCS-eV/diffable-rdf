@@ -206,7 +206,7 @@ IRI is handed to pyoxigraph, which emits a `@base` directive and RFC
 IRI, the call logs a warning and re-serializes without them.
 
 One exception, with a warning: a base containing a **fragment** is not used for
-the Turtle family. RFC 3986 §5.1 discards a base's fragment when resolving, so
+the Turtle family. RFC 3986 §5.2.2 discards a base's fragment when resolving, so
 `http://ex.org/d#a` under base `http://ex.org/d#` is correctly written `<#a>` —
 but rdflib's parser resolves a fragment reference by concatenation and reads it
 back as `http://ex.org/d##a`, a different IRI in every position. Absolute IRIs

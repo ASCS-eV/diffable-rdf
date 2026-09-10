@@ -14,10 +14,8 @@ from dataclasses import dataclass
 # ``@list`` is *the* ordered container (JSON-LD 1.1 §4.3.1).
 #
 # ``@graph`` and ``@set`` are deliberately absent. JSON-LD arrays are unordered
-# unless a container says otherwise, and ``@set`` exists precisely to express
-# "an unordered set of data" (§1.7; §4.3.2), so protecting them bought nothing
-# and cost the determinism this function is for: a document whose node objects
-# sit under ``@graph`` came out in whatever order the caller happened to build.
+# unless a container says otherwise, and ``@set`` expresses an unordered set of
+# data (§1.7; §4.3.2), so their arrays are sorted deterministically.
 _ORDERED_JSONLD_KEYWORDS: frozenset[str] = frozenset({"@context", "@list"})
 
 # What ``preserve_list_order_keys`` defaults to. This is a superset of the
@@ -107,15 +105,10 @@ def _apply_local_context(value: object, active: _LocalContext) -> _LocalContext:
     if any(key in {"@import", "@propagate", "@protected"} for key in value):
         result = _with_unknown(result)
 
-    # Key order inside a `@context` object is not meaningful: the JSON-LD 1.1
-    # API's Create Term Definition (section 4.2.2) carries a `defined` map and
-    # resolves a referenced term recursively, so an alias may be declared after
-    # the term that uses it. Folding the object once, front to back, missed
-    # those and left an ordered `@list` or `@json` value looking unordered --
-    # which then got sorted, changing the RDF. Repeating the pass until nothing
-    # new is learned reproduces the `defined`-map behaviour without writing a
-    # context processor. Bounded by the number of terms, since each pass either
-    # learns something or is the last.
+    # Context-object key order is not meaningful. Repeat term-definition
+    # resolution until stable so aliases can refer to terms defined elsewhere
+    # in the same object, as the JSON-LD 1.1 Create Term Definition algorithm
+    # permits. Each pass learns a term or reaches the stable result.
     for _ in range(len(value) + 1):
         before = (dict(result.keyword_aliases), result.json_terms, result.list_terms, result.unknown)
         result = _apply_term_definitions(value, result)
@@ -273,9 +266,8 @@ def deterministic_json(
     :param preserve_list_order_keys: Dict keys whose immediate list value
         keeps its order. Defaults to ``@context``, ``@list`` and ``imports``;
         a set passed here replaces that default, while the JSON-LD keyword
-        protections above still apply. Any set works -- the annotation was
-        ``frozenset[str]`` and a type checker refused the ``{...}`` literal
-        the documentation invites. ``@graph`` and ``@set`` are not
+        protections above still apply. Any set abstraction is accepted.
+        ``@graph`` and ``@set`` are not
         protected: JSON-LD leaves both unordered, so their arrays are sorted
         like any other.
     :returns: Deterministic JSON string.

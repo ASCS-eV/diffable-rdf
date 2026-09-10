@@ -1,18 +1,15 @@
 """Every advertised format works on the degraded path, and two spellings agree.
 
-A graph pyoxigraph cannot parse takes the rdflib fallback. Three things used to
-go wrong there and are pinned here.
+A graph pyoxigraph cannot parse takes the rdflib fallback. These tests define
+the format aliases and syntax accepted by that path.
 
-Aliases: this library accepts names rdflib has no plugin for -- ``n-triples``,
-``n-quads``, ``rdf/xml`` -- and rdflib's lookup is exact, so those raised
-``PluginException`` while their own synonyms worked.
+Aliases: this library accepts names RDFLib does not register as plugins --
+``n-triples``, ``n-quads``, and ``rdf/xml``. Exact plugin lookup maps each
+alias to its serializer name.
 
-TriG: rdflib's TrigSerializer needs a context-aware store, which a
-canonicalized graph is not. It now renders as collection-free Turtle, which is
-valid TriG because Turtle is a subset of it -- the same argument the module
-already makes for N3. That matters for correctness, not just for the error:
-TrigSerializer inherits Turtle's ``( … )`` rendering, and this path has no
-round-trip guard to catch a detached list.
+TriG: a canonicalized graph renders through collection-free Turtle, which is
+valid TriG because Turtle is a subset of it. Explicit RDF list triples retain
+shared cells on this fallback path.
 
 N-Quads: emitted as N-Triples, since the N-Quads graph label is optional and a
 single graph has no graph name -- so an N-Triples document is already a valid
@@ -112,12 +109,7 @@ CARRYING_ALIASES = [a for a in ALL_ALIASES if a not in LINE_ORIENTED_ALIASES]
 
 @pytest.mark.parametrize("output_format", CARRYING_ALIASES)
 def test_every_alias_that_can_carry_a_degraded_graph_does(output_format: str) -> None:
-    """No advertised name may fail for a reason of ours; three of them used to.
-
-    ``rdf/xml`` and the TriG and N3 spellings all raised ``PluginException`` or
-    a leaked rdflib error here before the alias table and the collection-free
-    TriG rendering landed.
-    """
+    """Each advertised carrying alias emits a non-empty document."""
     result = canonicalize_rdf_graph(_degraded_graph(), output_format=output_format)
     assert result.strip(), f"{output_format} returned empty output"
 
@@ -151,7 +143,7 @@ LINE_ORIENTED_SYNONYM_GROUPS = [g for g in SYNONYM_GROUPS if g[0] in LINE_ORIENT
     "group", CARRYING_SYNONYM_GROUPS, ids=[g[0] for g in CARRYING_SYNONYM_GROUPS]
 )
 def test_synonyms_for_one_format_produce_identical_bytes(group: tuple[str, ...]) -> None:
-    """The actual defect: two names for one format behaving differently."""
+    """Synonyms for one format produce identical bytes."""
     graph = _degraded_graph()
     outputs = {name: canonicalize_rdf_graph(graph, output_format=name) for name in group}
     first = outputs[group[0]]
@@ -177,14 +169,9 @@ def test_synonyms_refuse_for_the_same_reason(group: tuple[str, ...]) -> None:
     assert len(set(reasons)) == 1, f"{group} disagree on why they refuse"
 
 
-# Formats that can express this graph. N-Triples and N-Quads cannot: they
-# require absolute IRIs, and a graph only reaches the degraded path because it
-# holds something -- a relative IRI, a generalized term -- that N-Triples
-# cannot represent, which is how it failed pyoxigraph's parse in the first
-# place. Their degraded output is deterministic but not reparseable by a strict
-# parser, which is a pre-existing limitation of the format rather than of this
-# change; see the line-ordering and synonym tests below for what they do
-# guarantee.
+# Formats that can express this graph. N-Triples and N-Quads require absolute
+# IRIs, while the fixture includes a relative IRI and RDF list triples. The
+# line-oriented tests verify their explicit refusal and stable aliases.
 REPARSEABLE_ALIASES = [
     "turtle", "ttl", "xml", "rdf/xml", "trig", "n3",
     "json-ld", "jsonld", "application/ld+json",
@@ -260,8 +247,7 @@ def test_the_refusal_names_the_position_of_the_offending_term() -> None:
 def test_degraded_formats_that_carry_the_graph_are_stable_across_processes(
     output_format: str,
 ) -> None:
-    """RDF/XML is deliberately absent: it is not stable here, and that is its own
-    finding rather than something this change introduced or fixes."""
+    """The stable carrying formats produce identical process output."""
     script = textwrap.dedent(
         """
         import sys
@@ -300,8 +286,8 @@ def test_an_unregistered_name_still_reaches_rdflib_on_the_degraded_path() -> Non
         canonicalize_rdf_graph(_degraded_graph(), output_format="no-such-format")
 
 
-def test_degraded_json_ld_is_untouched_by_the_alias_change() -> None:
-    """JSON-LD has its own writer; it must not be routed through the plugin table."""
+def test_degraded_json_ld_uses_its_expanded_writer() -> None:
+    """Degraded JSON-LD uses the expanded JSON-LD writer."""
     result = canonicalize_rdf_graph(_degraded_graph(), output_format="json-ld")
     document = json.loads(result)
 
@@ -320,11 +306,8 @@ def test_degraded_json_ld_is_untouched_by_the_alias_change() -> None:
 def test_the_refusal_covers_an_iri_that_is_absolute_but_not_valid(iri: str) -> None:
     """Having a scheme is not the same as being an IRI.
 
-    The check was a regex for a leading ``scheme:``, which each of these
-    passes, so the term was written out and the document that came back could
-    not be parsed at all -- pyoxigraph raised a ``SyntaxError`` on line 1.
-    N-Triples 1.1 §2.2 admits only IRIs, so the guard now asks pyoxigraph,
-    which implements the grammar, instead of sniffing the scheme.
+    N-Triples 1.1 §2.2 admits only valid IRIs. Pyoxigraph validates the full
+    grammar rather than only the leading scheme.
     """
     graph = Graph()
     graph.add((URIRef(iri), EX.p, Literal("v")))

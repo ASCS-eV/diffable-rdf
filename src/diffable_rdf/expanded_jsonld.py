@@ -1,18 +1,9 @@
 """Expanded JSON-LD serialization for canonical rdflib graphs.
 
-This exists because rdflib's own JSON-LD serializer compacts an ``rdf:List``
-into ``@list`` without checking whether anything else references its cells, so
-a shared tail comes back duplicated and non-isomorphic. That is an upstream
-defect, present in rdflib 7.6.0 (the latest release), reported as RDFLib/rdflib
-issue #3542 with a fix proposed in pull request #3543 -- which is why the
-degraded path writes expanded node objects itself rather than routing through
-that serializer. It is deliberately not a general JSON-LD processor.
-
-``tests/test_upstream_tripwires.py`` fails once rdflib fixes the defect. That
-is the signal to re-examine this module, not to delete it: routing the degraded
-path back through rdflib's serializer would also give up the deterministic key
-order and the explicit refusal of terms the interoperable subset cannot carry,
-both of which are this library's own requirements rather than workarounds.
+The serializer writes expanded node objects rather than compacting ``rdf:List``
+structures into ``@list``. Expanded objects preserve shared nodes and cycles,
+retain deterministic key order, and reject terms outside the interoperable RDF
+subset. It is deliberately not a general JSON-LD processor.
 """
 
 from __future__ import annotations
@@ -32,11 +23,9 @@ _ABSOLUTE_IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 def _is_absolute_iri(value: str) -> bool:
     """Whether ``value`` is a usable absolute IRI.
 
-    Delegated to pyoxigraph, which already implements the check correctly, in
-    place of the scheme-prefix regex this used to rely on: that accepted a
-    space, a brace and a bad percent-escape, so an invalid IRI reached the
-    output and made pyoxigraph reject the whole document on the way back in.
-    rdflib parses such a document leniently, which is why nothing noticed.
+    Pyoxigraph validates the full IRI rather than only its scheme prefix.
+    This rejects spaces, braces, and malformed percent escapes before writing
+    an output document.
     """
     if not _ABSOLUTE_IRI.match(value):
         return False

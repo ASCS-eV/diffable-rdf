@@ -1,4 +1,4 @@
-"""Regression tests for exact RDF/XML literal serialization."""
+"""Exact RDF/XML literal serialization contracts."""
 
 from __future__ import annotations
 

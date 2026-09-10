@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
+import textwrap
 from urllib.parse import urljoin
 
 import pytest
@@ -15,6 +19,44 @@ from diffable_rdf import canonicalize_rdf_graph
 
 EX = Namespace("http://example.org/")
 BASE = "https://base.example/root/"
+
+
+def test_degraded_json_ld_is_reproducible_across_processes() -> None:
+    """Relative-node JSON-LD is stable across graph order and hash seeds."""
+    script = textwrap.dedent(
+        """
+        from rdflib import BNode, Graph, Literal, Namespace, URIRef
+        from diffable_rdf import canonicalize_rdf_graph
+        import sys
+        EX = Namespace("http://example.org/")
+        seed = int(sys.argv[1])
+        graph = Graph()
+        graph.bind("ex", EX)
+        shared = BNode(f"input-{seed}")
+        triples = [
+            (EX.a, EX.ref, shared),
+            (EX.b, EX.ref, shared),
+            (shared, EX.value, Literal("shared")),
+            (URIRef("relative/subject"), EX.p, Literal("fallback")),
+        ]
+        if seed % 2:
+            triples.reverse()
+        for triple in triples:
+            graph.add(triple)
+        sys.stdout.write(canonicalize_rdf_graph(graph, output_format="json-ld"))
+        """
+    )
+    outputs = {
+        subprocess.run(
+            [sys.executable, "-c", script, str(seed)],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "PYTHONHASHSEED": str(seed)},
+        ).stdout
+        for seed in (1, 7, 23, 101, 997)
+    }
+    assert len(outputs) == 1, "degraded JSON-LD differs between interpreter processes"
 
 
 def _resolve_relative_nodes(graph: Graph) -> Graph:
@@ -29,6 +71,15 @@ def _resolve_relative_nodes(graph: Graph) -> Graph:
     for subject, predicate, obj in graph:
         resolved.add((resolve(subject), predicate, resolve(obj)))
     return resolved
+
+
+def test_degraded_json_ld_rejects_literal_predicates() -> None:
+    """JSON-LD rejects generalized predicate terms without omitting triples."""
+    graph = Graph()
+    graph.add((EX.s, EX.p, Literal("kept")))
+    graph.addN([(EX.s, Literal("literal-predicate"), Literal("unsupported"), graph)])
+    with pytest.raises(ValueError, match="JSON-LD.*predicate.*Literal"):
+        canonicalize_rdf_graph(graph, output_format="json-ld")
 
 
 def _degraded_structure_graph() -> Graph:

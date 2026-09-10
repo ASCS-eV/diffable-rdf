@@ -1,4 +1,4 @@
-"""Semantic ordering regressions for deterministic JSON-LD output."""
+"""Semantic ordering contracts for deterministic JSON-LD output."""
 
 from __future__ import annotations
 
@@ -263,9 +263,8 @@ def test_a_term_definition_may_reference_an_alias_declared_after_it(document, pa
 
     Create Term Definition (JSON-LD 1.1 API §4.2.2) keeps a ``defined`` map and
     resolves a referenced term recursively, so a definition may name an alias
-    that appears later in the same object. Folding the object once, front to
-    back, missed those: each of these arrays came out sorted, and each sort
-    changed the RDF.
+    that appears later in the same object. Local resolution therefore reaches
+    a stable result before deciding whether an array carries order.
     """
     result = _assert_rdf_equivalent(document)
 
@@ -297,8 +296,7 @@ def test_an_array_nested_in_an_ordered_array_keeps_its_order(document, path):
     A list is *the* ordered container (JSON-LD 1.1 §4.3.1), and a nested array
     expands to a nested list rather than to a fresh unordered value -- so its
     order reaches the RDF as ``rdf:first``/``rdf:rest`` structure just the same.
-    The protection was applied only to the outer array, and the inner one was
-    sorted, which changed the RDF.
+    Nested arrays inherit the enclosing ordered-list semantics.
     """
     result = _assert_rdf_equivalent(document)
 
@@ -308,8 +306,7 @@ def test_an_array_nested_in_an_ordered_array_keeps_its_order(document, path):
 def test_a_shadowing_definition_in_a_nested_context_array_keeps_its_order():
     """``@context`` arrays are processed in order and each entry overrides the last.
 
-    That makes the inner array's order decide which definition of ``x`` wins,
-    so sorting it silently redefined the term.
+    The inner array's order determines which definition of ``x`` applies.
     """
     document = {
         "@context": [
@@ -327,12 +324,7 @@ def test_a_shadowing_definition_in_a_nested_context_array_keeps_its_order():
 
 
 def test_a_dict_inside_an_ordered_array_still_starts_a_sortable_node_object():
-    """The documented boundary: protection stops at a node object.
-
-    A dict nested in a protected array begins a fresh JSON-LD node object, so
-    its own arrays sort again. This is the control for the nested-array fix
-    above -- it must not have widened the protection past a dict.
-    """
+    """A dict inside an ordered array begins a sortable JSON-LD node object."""
     document = {"@id": "http://ex/s", "http://ex/p": {"@list": [{"http://ex/q": [3, 1, 2]}]}}
 
     result = _assert_rdf_equivalent(document)

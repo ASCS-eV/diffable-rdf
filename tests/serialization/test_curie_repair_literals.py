@@ -3,12 +3,9 @@
 pyoxigraph writes ``prefix:local\\.`` for an IRI whose local part ends in a dot,
 which Turtle's PN_LOCAL_ESC production permits and rdflib's notation3 parser
 rejects. The repair rewrites such CURIEs to full ``<IRI>`` form so the output
-round-trips. Applied over the whole document it also matched inside string
-literals, corrupting the value and producing text that would not parse -- which
-the round-trip guard then reported as a refusal of a valid graph.
+round-trips while preserving string-literal values.
 
-The rewrite now skips literals. These tests cover the scanner that decides
-where a literal is, because that is the part with edge cases.
+The scanner protects literal and IRIREF spans before rewriting CURIE tokens.
 """
 
 from __future__ import annotations
@@ -42,8 +39,7 @@ DOTTED = Namespace("https://w3id.org/biolink/vocab/")
         # Two literals in one line are two spans.
         ('"x" p "y"', ['"x"', '"y"']),
         # An IRIREF is protected too, and for a reason: production [18]
-        # excludes '"' but permits "'", so an apostrophe in an IRI used to
-        # open a string span that swallowed the rest of the document.
+        # excludes '"' but permits "'", so IRIREF spans protect apostrophes.
         (
             "<http://ex/a> <http://ex/p> <http://ex/b>",
             ["<http://ex/a>", "<http://ex/p>", "<http://ex/b>"],
@@ -79,11 +75,24 @@ def test_a_curie_outside_a_literal_is_still_rewritten() -> None:
 
 
 def test_a_curie_inside_a_literal_is_left_alone() -> None:
-    """The defect, at the level of the function that had it."""
+    """Literal spans remain unchanged by CURIE rewriting."""
     prefixes = {"ex": "http://example.org/"}
     text = 'ex:s ex:p "ex:thing\\. text" .\n'
 
     assert _expand_trailing_dot_curies(text, prefixes) == text
+
+
+def test_a_literal_that_looks_like_a_trailing_dot_curie_serializes_intact() -> None:
+    """Turtle CURIE repair leaves literal lexical values unchanged."""
+    graph = Graph()
+    graph.bind("ex", EX)
+    graph.add((EX.s, EX.p, Literal("see ex:thing\\. more")))
+    graph.add((EX.other, EX.p, EX.o))
+    result = canonicalize_rdf_graph(graph, output_format="turtle")
+    reparsed = Graph().parse(data=result, format="turtle")
+    assert isomorphic(reparsed, graph)
+    assert reparsed.value(EX.s, EX.p) == Literal("see ex:thing\\. more")
+    assert "ex:other" in result
 
 
 def test_both_in_one_document() -> None:
@@ -98,7 +107,7 @@ def test_both_in_one_document() -> None:
 
 @pytest.mark.parametrize("output_format", ["turtle", "n3", "trig"])
 def test_a_graph_whose_literal_looks_like_a_curie_serializes(output_format: str) -> None:
-    """End to end: a valid graph that used to be refused for all three formats."""
+    """A CURIE-like literal round-trips in each Turtle-family format."""
     graph = Graph()
     graph.bind("ex", EX)
     graph.add((EX.s, EX.p, Literal("ex:thing\\. ")))
@@ -140,8 +149,8 @@ def test_a_dotted_iri_and_a_curie_like_literal_together() -> None:
     assert reparsed.value(DOTTED["StrandEnum#."], EX.p) == Literal("biolink:StrandEnum#\\. ")
 
 
-def test_deterministic_turtle_is_unaffected() -> None:
-    """It renders through rdflib and never applied this rewrite; keep it that way."""
+def test_deterministic_turtle_preserves_curie_like_literal_values() -> None:
+    """Deterministic Turtle preserves CURIE-like literal values."""
     graph = Graph()
     graph.bind("ex", EX)
     graph.add((EX.s, EX.p, Literal("ex:thing\\. ")))
@@ -160,16 +169,7 @@ def test_a_multiline_literal_containing_a_curie_is_left_alone() -> None:
 
 
 def test_an_apostrophe_in_an_iri_does_not_break_the_dot_repair() -> None:
-    """The scanner's premise was wrong, and it cost a valid graph.
-
-    Turtle's IRIREF production [18] excludes ``"`` but permits ``'``, so
-    ``<http://ex/a'b>`` -- an apostrophe is a ``sub-delim``, legal in an IRI
-    path per RFC 3987 -- opened a phantom string span running to the end of
-    the document. Every later span was shifted, the trailing-dot repair ran
-    inside a literal instead of outside one, and ``canonicalize_rdf_graph``
-    raised "canonical turtle serialization does not parse back" for a graph
-    that is perfectly ordinary.
-    """
+    """IRIREF spans accept apostrophes permitted by RFC 3987."""
     graph = Graph()
     graph.bind("dotted", DOTTED)
     graph.add((EX["a'b"], EX.p, Literal("x")))

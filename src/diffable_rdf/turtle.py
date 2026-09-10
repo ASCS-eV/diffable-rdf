@@ -28,10 +28,8 @@ def _quote_turtle_string(text: str) -> str:
 
     Turtle's ``STRING_LITERAL_QUOTE`` excludes only ``"``, ``\\``, LF and CR,
     so those are the escapes this needs; every other character, including a
-    Unicode line separator, is legal raw. The layout deliberately reproduces
-    what rdflib's own quoting produces -- long-quoted when the value contains a
-    newline, short-quoted otherwise -- so that switching to local rendering
-    does not reformat anybody's existing output.
+    Unicode line separator, is legal raw. Values with newlines use long-quoted
+    form; other values use short-quoted form.
     """
     if "\n" in text:
         encoded = text.replace("\\", "\\\\")
@@ -78,10 +76,8 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
     @staticmethod
     def _object_sort_key(node: Node) -> tuple:
         """A total order over objects that never consults the value space."""
-        # Rank kinds in the order rdflib's own comparator produces -- blank
-        # nodes, then IRIs, then literals -- so replacing the comparator does
-        # not reorder anybody's existing output. Within a kind the complete
-        # term spelling decides, which is what makes the order total.
+        # Rank blank nodes, IRIs, and literals in that order. Complete term
+        # spelling provides a total order within each kind.
         if isinstance(node, BNode):
             return (0, str(node), "", "")
         if isinstance(node, URIRef):
@@ -100,13 +96,9 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
     def _literal_turtle(self, node) -> str:
         """Render a literal in quoted form, preserving its lexical text exactly.
 
-        Written here rather than delegated to rdflib's ``Literal._literal_n3``,
-        which re-spells a value-derived form regardless of its ``use_plain``
-        argument: it rewrites ``inf`` to ``INF`` and ``nan`` to ``NaN`` for the
-        numeric datatypes, so every ``xsd:double``/``xsd:float`` NaN or
-        infinity came back with a lexical form the graph never held, and the
-        round-trip guard rightly refused the result. The term carries
-        everything needed to write it, so no private API is required.
+        The graph term supplies the lexical form directly. This avoids private
+        RDFLib APIs and preserves ``xsd:double`` and ``xsd:float`` NaN and
+        infinity spellings.
 
         Turtle's numeric and boolean shorthand is not used at all: it renders
         the Python *value*, which merges distinct RDF terms such as ``01`` and

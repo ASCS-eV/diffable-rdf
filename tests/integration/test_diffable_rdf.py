@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from rdflib import BNode, Graph, Literal, Namespace, URIRef
+from rdflib import BNode, Graph, Literal, Namespace
 from rdflib.compare import isomorphic
 from rdflib.namespace import RDF, RDFS, XSD
 
@@ -142,12 +142,7 @@ def test_well_known_prefix_map_contains_schema_org():
     ],
 )
 def test_deterministic_json_accepts_non_string_keys(obj):
-    """Must not be less permissive than the stdlib it wraps.
-
-    json.dumps coerces int/float/bool/None keys to strings; sorting the
-    raw keys raised TypeError on any mix of key types, rejecting input
-    that serializes fine with json.dumps.
-    """
+    """JSON-compatible non-string keys produce deterministic output."""
     out = deterministic_json(obj)
     assert json.loads(out) == json.loads(json.dumps(obj))
 

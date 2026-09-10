@@ -41,17 +41,10 @@ def test_mixed_key_dictionary_list_permutations_are_deterministic():
 
 
 def test_encoded_key_collisions_are_refused_not_emitted_twice():
-    """This used to emit the name twice, which broke two promises at once.
-
-    ``json.dumps({1: "a", "1": "b"})`` writes ``{"1": "a", "1": "b"}``, and
-    ``json.loads`` of that keeps only the last entry -- so the text could not
-    be read back. Worse, the two items tie under the sort key, so the stable
-    sort ordered them by insertion: the equal dicts below rendered
-    differently, contradicting the one guarantee this function makes.
-    """
+    """Keys with one JSON spelling are rejected before rendering."""
     forward = {1: "number", "1": "string"}
     reverse = {"1": "string", 1: "number"}
-    assert forward == reverse, "equal data, so equal text was promised"
+    assert forward == reverse, "equal data requires equal text"
 
     for document in (forward, reverse, [forward, 0], {"nested": [reverse]}):
         with pytest.raises(ValueError, match="both encode to the JSON name"):
@@ -88,9 +81,8 @@ def test_non_string_keys_sort_by_the_name_json_writes_not_by_str():
 
     The encoder writes a float key through ``floatstr`` and an int key through
     ``int.__repr__``, so ``float("inf")`` is written ``Infinity`` and a subclass
-    that overrides ``__str__`` is still written as its number. Sorting on
-    ``str(key)`` therefore ordered the output by names that were never
-    emitted, and the object came out unsorted.
+    that overrides ``__str__`` is still written as its number. Ordering uses
+    the names emitted by the JSON encoder.
     """
 
     class Numbered(int):

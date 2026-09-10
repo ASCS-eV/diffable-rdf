@@ -39,13 +39,8 @@ def _numbering_order_key(identifier: str) -> tuple[tuple[int, int, str], ...]:
     """Sort blank-node identifiers the way their numbering reads.
 
     RDFC-1.0 names blank nodes ``c14n0``, ``c14n1``, ... and this module's
-    input is canonical quads, so a plain lexicographic sort puts ``c14n10``
-    between ``c14n1`` and ``c14n2``.  The collision counter is assigned in
-    this order, so from ten blank nodes onwards the suffixes stopped following
-    the canonical numbering -- and inserting one node then shifted the suffix
-    of every tied node after its lexicographic position: adding ``c14n10`` to
-    ten tied nodes relabelled eight of them, for a change that should have
-    added one label and moved none.
+    input is canonical quads. Numeric ordering keeps ``c14n2`` before
+    ``c14n10`` so collision suffixes follow the canonical numbering.
 
     Digit runs compare numerically and the run's own text breaks a tie between
     two spellings of the same number, so the order is total for any input,
@@ -91,21 +86,14 @@ def wl_blank_node_labels(
     Raises
     ------
     ValueError
-        If ``iterations`` is negative.  ``range`` treats a negative count as
-        zero, so such a call used to be accepted and return labels refined for
-        no rounds at all -- plausible-looking, stable across processes, and
-        less diff-stable than the caller believed, with nothing to say so.
+        If ``iterations`` is negative. ``range`` treats a negative count as
+        zero, so explicit counts must be non-negative.
 
     Notes
     -----
-    Each round's signature is hashed before being fed into the next
-    round.  This is load-bearing: signatures are built by concatenating a
-    node's own signature with those of all its neighbours, so without the
-    per-round hash their length grows by roughly a factor of the average
-    degree every round (measured ~2.7x/round on OWL-restriction-shaped
-    data), exhausting memory within ~10 rounds.  Hashing bounds each
-    signature to a constant size while inducing exactly the same
-    partition of the blank nodes.
+    Each round's signature is hashed before the next round. Signatures combine
+    neighboring values, so hashing bounds their representation while inducing
+    the same partition of blank nodes.
 
     Labels use 12 hex chars (48 bits); the birthday-bound collision
     probability is ~n²/2^49 (~0.002% at 100k nodes).  Genuine collisions

@@ -21,11 +21,48 @@ import textwrap
 
 import pytest
 from rdflib import BNode, Graph, Literal, Namespace
+from rdflib.compare import isomorphic
 
 from diffable_rdf import canonicalize_rdf_graph
 from diffable_rdf.canonicalize import _FORMAT_MAP
 
 EX = Namespace("http://example.org/")
+
+
+@pytest.mark.parametrize("output_format", ["turtle", "json-ld", "xml", "nt", "nquads", "trig", "n3"])
+def test_canonicalize_rdf_graph_is_deterministic_across_processes(output_format: str) -> None:
+    """Every supported format is byte-identical across interpreters."""
+    script = textwrap.dedent(
+        """
+        from rdflib import Graph, Namespace, BNode, Literal, RDF
+        from diffable_rdf import canonicalize_rdf_graph
+        import sys
+        EX = Namespace("http://example.org/")
+        graph = Graph()
+        hub = BNode()
+        for i in range(3):
+            graph.add((EX[f"s{i}"], RDF.type, EX.Thing))
+            graph.add((EX[f"s{i}"], EX.ref, hub))
+        graph.add((hub, EX.name, Literal("hub")))
+        sys.stdout.write(canonicalize_rdf_graph(graph, output_format=sys.argv[1]))
+        """
+    )
+    outputs = {
+        subprocess.run([sys.executable, "-c", script, output_format], capture_output=True, text=True, check=True).stdout
+        for _ in range(3)
+    }
+    assert len(outputs) == 1, f"{output_format} output differs between interpreter processes"
+
+
+@pytest.mark.parametrize("output_format", ["Turtle", "TTL", "N3"])
+def test_canonicalize_rdf_graph_accepts_mixed_case_format_names(output_format: str) -> None:
+    """Case-insensitive format aliases round-trip through their parsers."""
+    graph = Graph()
+    graph.bind("ex", EX)
+    graph.add((EX.s, EX.p, Literal("v")))
+    result = canonicalize_rdf_graph(graph, output_format=output_format)
+    reparsed = Graph().parse(data=result, format=output_format.lower())
+    assert isomorphic(reparsed, graph), f"{output_format} output is not isomorphic to the input"
 
 # Hash seeds, not repeat count: rdflib's traversal order follows set iteration,
 # which is stable within one process however many times it is called.

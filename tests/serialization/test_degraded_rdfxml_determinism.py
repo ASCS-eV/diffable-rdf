@@ -1,12 +1,9 @@
 """Degraded RDF/XML must be byte-stable across processes.
 
 `xml` is a format this library maps itself, so it carries the determinism
-guarantee. The fallback goes through rdflib's RDF/XML serializer, which orders
-both its ``rdf:Description`` elements and the property elements inside them by
-its own graph traversal — measured at 6 distinct documents over 6 hash seeds
-for one graph, differing in element order alone. RDF/XML gives neither order
-any meaning, so they are sorted, exactly as the line-oriented branch already
-sorts N-Triples lines against the same serializer's instability.
+guarantee. The fallback orders ``rdf:Description`` and property elements by
+their RDF/XML content. RDF/XML gives neither order meaning, so sorting is
+lossless and deterministic.
 """
 
 from __future__ import annotations
@@ -99,14 +96,7 @@ def test_sorting_preserves_the_graph() -> None:
 
 
 def test_a_literal_carriage_return_still_survives_the_sort() -> None:
-    """A raw CR would be normalized to LF by any XML parser, changing the value.
-
-    rdflib writes it as ``&#13;`` itself, and the sort no longer disturbs that:
-    elements are moved as spans of rdflib's own text. The earlier sort parsed
-    and re-serialized the tree, which resolved the character reference back to
-    a raw CR -- so the ``&#xD;`` this test used to look for was this library
-    repairing damage its own sort had done.
-    """
+    """RDF/XML preserves a literal carriage return through sorting and parsing."""
     graph = Graph()
     graph.bind("ex", EX)
     value = Literal("a" + chr(13) + "b")
@@ -142,16 +132,7 @@ def _property_order(result: str) -> list[list[str]]:
 
 
 def test_property_elements_within_a_subject_are_ordered_too() -> None:
-    """The first fix only sorted the top level, and that was not enough.
-
-    Checked per ``rdf:Description``: the properties of one subject are ordered
-    among themselves, and nothing says the last property of one subject sorts
-    before the first property of the next. The earlier version of this test
-    flattened every property element in the document into one list and required
-    *that* to be sorted -- which happened to hold only because it matched
-    nothing at all: it looked for lines starting ``<ex:``, and the sort was
-    rewriting the caller's ``ex:`` prefix to ``ns1:`` at the time.
-    """
+    """Each RDF description orders its property elements by tag."""
     graph = Graph()
     graph.bind("ex", EX)
     for predicate in ("zeta", "alpha", "mu"):
@@ -170,13 +151,7 @@ def test_property_elements_within_a_subject_are_ordered_too() -> None:
 
 
 def test_the_callers_prefix_names_survive_the_sort() -> None:
-    """The sort used to rename every prefix but rdf: to nsN:.
-
-    ``ElementTree`` discards the document's prefix mapping on parse and
-    re-derives it from a process-global registry on write, so ``beta:`` came
-    back as ``ns1:``. rdflib had written the caller's name correctly; the
-    determinism pass replaced it.
-    """
+    """Sorting preserves explicit caller prefix names in the RDF/XML output."""
     beta = Namespace("http://beta.example/")
     graph = Graph(bind_namespaces="none")
     graph.bind("beta", beta)
@@ -191,13 +166,7 @@ def test_the_callers_prefix_names_survive_the_sort() -> None:
 
 
 def test_the_output_does_not_depend_on_process_global_xml_state() -> None:
-    """Determinism means the bytes cannot depend on what else the process did.
-
-    ``ElementTree.register_namespace`` writes to a module-global registry that
-    the serializer consults, so an unrelated call anywhere in the process --
-    another library preparing its own XML output -- changed this library's
-    result for the same graph.
-    """
+    """RDF/XML bytes are independent of process-global namespace state."""
     beta = Namespace("http://beta.example/")
     graph = Graph(bind_namespaces="none")
     graph.bind("beta", beta)
@@ -219,14 +188,7 @@ def test_the_output_does_not_depend_on_process_global_xml_state() -> None:
 
 
 def test_properties_are_ordered_by_predicate_not_by_their_objects_label() -> None:
-    """Ordering by the object's blank-node label turned small edits into big diffs.
-
-    The old key led with any ``rdf:about``/``rdf:nodeID`` on the element, which
-    for a property element is its *object's* identity. A blank-node label
-    changes whenever the graph around it changes, so unrelated properties
-    reshuffled. The predicate is the stable thing to lead with, and it is what
-    the line-oriented formats sort by.
-    """
+    """Property predicates lead the RDF/XML ordering key."""
     graph = Graph()
     graph.bind("ex", EX)
     graph.add((URIRef("relative/thing"), EX.p, Literal("forces the degraded path")))
@@ -244,8 +206,8 @@ def test_properties_are_ordered_by_predicate_not_by_their_objects_label() -> Non
     assert len(subject_properties) == 4
 
 
-def test_the_normal_path_is_untouched() -> None:
-    """pyoxigraph's RDF/XML is already stable; the sort must not reach it."""
+def test_pyoxigraph_rdf_xml_uses_its_native_order() -> None:
+    """Pyoxigraph RDF/XML uses its native serialization path."""
     graph = Graph()
     graph.bind("ex", EX)
     graph.add((EX.s, EX.p, Literal("v")))

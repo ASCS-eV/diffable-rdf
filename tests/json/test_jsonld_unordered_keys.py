@@ -1,16 +1,7 @@
-"""``@graph`` and ``@set`` are unordered in JSON-LD, so their arrays get sorted.
+"""JSON-LD ordering contracts for ``@graph``, ``@set``, and nested lists.
 
-JSON-LD arrays carry no order unless a container says they do: ``@set`` exists
-precisely to express "an unordered set of data" (JSON-LD 1.1 §1.7, §4.3.2), and
-``@list`` is the ordered one (§4.3.1). Protecting ``@graph``/``@set`` from
-sorting therefore protected nothing and defeated the determinism this helper
-exists for.
-
-The risk in removing the protection is that a genuinely ordered construct
-*nested inside* one of those arrays loses its order too, because that
-protection comes from the keyword logic rather than from the parent key. These
-tests hold both halves: the outer arrays sort, and nothing ordered inside them
-moves.
+``@graph`` and ``@set`` arrays are unordered under JSON-LD 1.1. Nested
+``@list`` and locally declared list containers retain their element order.
 """
 
 from __future__ import annotations
@@ -58,7 +49,7 @@ def test_sorting_an_unordered_container_does_not_change_the_rdf(container: str) 
 
 
 def test_a_list_nested_in_a_graph_array_keeps_its_order() -> None:
-    """The regression this change could have caused, and must not."""
+    """An ordered list retains its element order inside an unordered array."""
     document = {
         "@graph": [
             {"@id": f"{EX}s", f"{EX}items": {"@list": ["zeta", "alpha", "mu"]}},

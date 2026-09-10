@@ -1,9 +1,8 @@
-"""The public surface must hold up to the ways callers actually inspect it.
+"""Runtime-inspection contracts for the public API.
 
 A library's annotations are not only read by a type checker. Pydantic,
 FastAPI, `typer`, `attrs`, `beartype` and every documentation generator call
-`typing.get_type_hints`, which evaluates the annotations at runtime -- and an
-annotation that only exists under `TYPE_CHECKING` raises `NameError` there.
+`typing.get_type_hints`, which evaluates annotations at runtime.
 """
 
 from __future__ import annotations
@@ -39,11 +38,7 @@ def test_the_documented_surface_is_what_the_module_exports() -> None:
 
 @pytest.mark.parametrize("name", PUBLIC_NAMES)
 def test_every_public_annotation_resolves_at_runtime(name: str) -> None:
-    """`deterministic_turtle` raised NameError: RdfGraph.
-
-    Its `graph` parameter was annotated with a name imported only under
-    `TYPE_CHECKING`, for a dependency this package requires unconditionally.
-    """
+    """Each public callable has resolvable runtime annotations."""
     function = getattr(diffable_rdf, name)
 
     hints = typing.get_type_hints(function)
@@ -60,12 +55,7 @@ def test_the_turtle_entry_point_names_the_graph_type_it_takes() -> None:
 
 
 def test_the_preserved_keys_argument_admits_any_set() -> None:
-    """The annotation was `frozenset[str]`, narrower than the documented contract.
-
-    The documentation invites `preserve_list_order_keys={"custom"}`, which a
-    type checker rejected against `frozenset[str]`, and every caller that
-    passed a plain set was reporting an error it could not fix without a cast.
-    """
+    """The key collection annotation accepts the standard set abstractions."""
     hints = typing.get_type_hints(deterministic_json)
 
     assert hints["preserve_list_order_keys"] == AbstractSet[str] | None
@@ -78,17 +68,7 @@ def test_the_preserved_keys_argument_admits_any_set() -> None:
 
 
 def test_both_dependencies_are_loaded_before_any_public_call_can_be_made() -> None:
-    """A dead `except ImportError` around pyoxigraph's import claimed otherwise.
-
-    `deterministic_turtle` caught `ImportError` from importing pyoxigraph and
-    re-raised advice to install it. Both are declared, non-optional
-    dependencies, and importing this package imports both -- so the branch
-    could not run for any installation able to reach it, while suggesting to
-    the reader that the dependency was optional.
-
-    Checked in a fresh interpreter: in this one, pytest has imported
-    everything already, which would make the assertion vacuous.
-    """
+    """Importing the package loads both required RDF dependencies."""
     result = subprocess.run(
         [
             sys.executable,
@@ -104,16 +84,10 @@ def test_both_dependencies_are_loaded_before_any_public_call_can_be_made() -> No
 
 
 def test_the_version_has_a_changelog_section() -> None:
-    """A release must not be able to ship without saying what is in it.
-
-    The publish workflow checks the same two things against the release tag,
-    but only at release time. Checking here means a version bump without its
-    changelog entry, or an entry without the bump, fails on the pull request
-    that introduced it.
-    """
+    """The current package version has the leading changelog section."""
     from pathlib import Path
 
-    root = Path(__file__).resolve().parent.parent
+    root = Path(__file__).resolve().parents[2]
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
 
     assert f"## [{diffable_rdf.__version__}]" in changelog, (
