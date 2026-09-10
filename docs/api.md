@@ -412,7 +412,13 @@ adding one blank node would then shift the suffix of every tied node after it.
 **Arguments.**
 
 - `quads` — a list of `pyoxigraph.Quad`, canonicalized with
-  `Dataset.canonicalize(CanonicalizationAlgorithm.RDFC_1_0)`.
+  `Dataset.canonicalize(CanonicalizationAlgorithm.RDFC_1_0)`. Subjects must
+  be `NamedNode` or `BlankNode`; predicates must be `NamedNode`; objects may
+  be `NamedNode`, `BlankNode`, or `Literal`; and graph names may be
+  `NamedNode`, `BlankNode`, or `DefaultGraph`. Embedded
+  `pyoxigraph.Triple` terms are unsupported and raise `ValueError`.
+  `Literal` information, including its value, language, and direction, is
+  used unchanged.
 - `iterations` — refinement rounds. `None`, the default, refines each connected
   blank-node component until its own partition stops changing. A non-negative
   integer runs exactly that many synchronous rounds across every blank node, so
@@ -443,6 +449,13 @@ Applies `wl_blank_node_labels` and returns a **new** list of
 `pyoxigraph.Quad`, in the input order, with every blank node — including blank
 nodes used as graph names — relabelled. The input list and its quads are
 untouched. The result is isomorphic to the input.
+
+Its quad-term boundary is the same as `wl_blank_node_labels`: subjects must be
+`NamedNode` or `BlankNode`; predicates must be `NamedNode`; objects may be
+`NamedNode`, `BlankNode`, or `Literal`; and graph names may be `NamedNode`,
+`BlankNode`, or `DefaultGraph`. Embedded `pyoxigraph.Triple` terms are
+unsupported and raise `ValueError`. `Literal` information, including its
+value, language, and direction, is retained unchanged.
 
 This is the one-line way to add diff stability to a pipeline that already runs
 RDFC-1.0 and owns its own serialization, prefix handling and base IRI. Such a

@@ -35,6 +35,20 @@ import pyoxigraph
 __all__ = ["wl_blank_node_labels", "wl_relabel_quads"]
 
 
+def _validate_quad_terms(quads: list) -> None:
+    """Reject RDF-star terms outside this module's top-level quad contract."""
+    for quad in quads:
+        if any(
+            isinstance(term, pyoxigraph.Triple)
+            for term in (quad.subject, quad.predicate, quad.object, quad.graph_name)
+        ):
+            raise ValueError(
+                "WL functions support only top-level quad terms; embedded pyoxigraph.Triple terms are unsupported. "
+                "Use NamedNode or BlankNode subjects, NamedNode predicates, NamedNode, BlankNode, or Literal "
+                "objects, and NamedNode, BlankNode, or DefaultGraph graph names."
+            )
+
+
 def _numbering_order_key(identifier: str) -> tuple[tuple[int, int, str], ...]:
     """Sort blank-node identifiers the way their numbering reads.
 
@@ -66,7 +80,11 @@ def wl_blank_node_labels(
     Parameters
     ----------
     quads : list
-        Canonical quads from pyoxigraph (i.e. after RDFC-1.0).
+        Canonical pyoxigraph quads (i.e. after RDFC-1.0), with NamedNode or
+        BlankNode subjects; NamedNode predicates; NamedNode, BlankNode, or
+        Literal objects; and NamedNode, BlankNode, or DefaultGraph graph
+        names. Embedded ``pyoxigraph.Triple`` terms are unsupported. Literal
+        information, including language and direction, is used unchanged.
     iterations : int | None
         Number of WL refinement rounds.  The default (``None``) refines
         each connected blank-node component until its partition stops
@@ -86,8 +104,9 @@ def wl_blank_node_labels(
     Raises
     ------
     ValueError
-        If ``iterations`` is negative. ``range`` treats a negative count as
-        zero, so explicit counts must be non-negative.
+        If a quad contains an embedded ``pyoxigraph.Triple``, or if
+        ``iterations`` is negative. ``range`` treats a negative count as zero,
+        so explicit counts must be non-negative.
 
     Notes
     -----
@@ -117,6 +136,8 @@ def wl_blank_node_labels(
     by the collision counter in ``c14nN`` order -- numerically, so ``c14n2``
     precedes ``c14n10`` -- exactly as for genuinely indistinguishable nodes.
     """
+    _validate_quad_terms(quads)
+
     if iterations is not None and iterations < 0:
         raise ValueError(
             f"iterations must be None or a non-negative integer, got {iterations!r}. "
@@ -298,7 +319,11 @@ def wl_relabel_quads(
     Parameters
     ----------
     quads : list
-        Canonical quads from pyoxigraph (i.e. after RDFC-1.0).
+        Canonical pyoxigraph quads (i.e. after RDFC-1.0), with NamedNode or
+        BlankNode subjects; NamedNode predicates; NamedNode, BlankNode, or
+        Literal objects; and NamedNode, BlankNode, or DefaultGraph graph
+        names. Embedded ``pyoxigraph.Triple`` terms are unsupported. Literal
+        information, including language and direction, is retained unchanged.
     iterations : int | None
         Number of WL refinement rounds; ``None`` (the default) refines to
         the WL fixpoint.  See :func:`wl_blank_node_labels`.
@@ -308,6 +333,12 @@ def wl_relabel_quads(
     list
         New quads with every blank node relabelled, including blank nodes
         used as graph names, so the result is isomorphic to the input.
+
+    Raises
+    ------
+    ValueError
+        If a quad contains an embedded ``pyoxigraph.Triple``, or if
+        ``iterations`` is negative.
     """
     labels = wl_blank_node_labels(quads, iterations=iterations)
 

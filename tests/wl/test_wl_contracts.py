@@ -3,12 +3,34 @@
 from __future__ import annotations
 
 import pyoxigraph as ox
+import pytest
 from rdflib import BNode, Graph, Namespace
 from rdflib.compare import isomorphic
 
 from diffable_rdf import wl_blank_node_labels, wl_relabel_quads
 
 EX = Namespace("http://example.org/")
+
+
+def _quad_with_embedded_triple(
+    *, shared_top_level_node: bool, triple_has_blank_node: bool, nested_object: bool = False
+) -> list:
+    """Build a constructible quad whose object is an embedded triple."""
+    predicate = ox.NamedNode("http://example.org/p")
+    embedded_subject = (
+        ox.BlankNode("inside") if triple_has_blank_node else ox.NamedNode("http://example.org/inside")
+    )
+    embedded = ox.Triple(embedded_subject, predicate, ox.Literal("value"))
+    if nested_object:
+        embedded = ox.Triple(ox.NamedNode("http://example.org/outer"), predicate, embedded)
+    quads = [
+        ox.Quad(ox.NamedNode("http://example.org/root"), predicate, embedded, ox.DefaultGraph())
+    ]
+    if shared_top_level_node:
+        quads.append(
+            ox.Quad(ox.NamedNode("http://example.org/other"), predicate, embedded_subject, ox.DefaultGraph())
+        )
+    return quads
 
 
 def _canonical_quads(graph: Graph) -> list:
@@ -22,6 +44,93 @@ def _canonical_dataset_quads(nquads: bytes) -> list:
     dataset = ox.Dataset(ox.parse(nquads, format=ox.RdfFormat.N_QUADS))
     dataset.canonicalize(ox.CanonicalizationAlgorithm.RDFC_1_0)
     return list(dataset)
+
+
+@pytest.mark.parametrize("function", (wl_blank_node_labels, wl_relabel_quads))
+@pytest.mark.parametrize("iterations", (None, 0, 2), ids=("default-rounds", "zero-rounds", "two-rounds"))
+@pytest.mark.parametrize(
+    "quads",
+    [
+        pytest.param(
+            _quad_with_embedded_triple(shared_top_level_node=False, triple_has_blank_node=True),
+            id="blank-node-only-inside-triple",
+        ),
+        pytest.param(
+            _quad_with_embedded_triple(shared_top_level_node=True, triple_has_blank_node=True),
+            id="blank-node-shared-with-top-level-term",
+        ),
+        pytest.param(
+            _quad_with_embedded_triple(
+                shared_top_level_node=False,
+                triple_has_blank_node=True,
+                nested_object=True,
+            ),
+            id="nested-embedded-object",
+        ),
+        pytest.param(
+            _quad_with_embedded_triple(shared_top_level_node=False, triple_has_blank_node=False),
+            id="triple-without-blank-nodes",
+        ),
+    ],
+)
+def test_wl_functions_reject_embedded_triple_objects(function, iterations: int | None, quads: list) -> None:
+    """WL functions accept only the supported top-level quad terms."""
+    with pytest.raises(ValueError, match="embedded pyoxigraph.Triple"):
+        function(quads, iterations=iterations)
+
+
+@pytest.mark.parametrize("iterations", (None, 0, 2))
+@pytest.mark.parametrize(
+    "graph_name",
+    (
+        ox.DefaultGraph(),
+        ox.NamedNode("http://example.org/graph"),
+        ox.BlankNode("graph"),
+    ),
+    ids=("default-graph", "named-graph", "blank-named-graph"),
+)
+def test_wl_functions_leave_supported_input_quads_unchanged(iterations: int | None, graph_name) -> None:
+    """Both WL entry points preserve their supported input list and quads."""
+    node = ox.BlankNode("node")
+    quads = [
+        ox.Quad(ox.NamedNode("http://example.org/root"), ox.NamedNode("http://example.org/ref"), node, graph_name),
+        ox.Quad(node, ox.NamedNode("http://example.org/value"), ox.Literal("text"), graph_name),
+    ]
+    original_list = list(quads)
+    original_rendering = [str(quad) for quad in quads]
+
+    labels = wl_blank_node_labels(quads, iterations=iterations)
+    relabelled = wl_relabel_quads(quads, iterations=iterations)
+
+    assert labels
+    assert relabelled != quads
+    assert relabelled is not quads
+    assert quads == original_list
+    assert all(quad is original for quad, original in zip(quads, original_list, strict=True))
+    assert [str(quad) for quad in quads] == original_rendering
+    assert [str(quad.predicate) for quad in relabelled] == [str(quad.predicate) for quad in quads]
+    assert str(relabelled[1].object) == str(quads[1].object)
+
+
+def test_wl_keeps_direction_tagged_literals_complete_and_distinct() -> None:
+    """Literal direction contributes to labels and is retained during relabelling."""
+    predicate = ox.NamedNode("http://example.org/value")
+    ltr = ox.Literal("text", language="en", direction=ox.BaseDirection.LTR)
+    rtl = ox.Literal("text", language="en", direction=ox.BaseDirection.RTL)
+    quads = [
+        ox.Quad(ox.BlankNode("ltr"), predicate, ltr, ox.DefaultGraph()),
+        ox.Quad(ox.BlankNode("rtl"), predicate, rtl, ox.DefaultGraph()),
+    ]
+
+    labels = wl_blank_node_labels(quads)
+    relabelled = wl_relabel_quads(quads)
+
+    assert labels["ltr"].split("_")[0] != labels["rtl"].split("_")[0]
+    assert {quad.object for quad in relabelled} == {ltr, rtl}
+    assert {(quad.object.value, quad.object.language, quad.object.direction) for quad in relabelled} == {
+        ("text", "en", ox.BaseDirection.LTR),
+        ("text", "en", ox.BaseDirection.RTL),
+    }
 
 
 def _shapes_graph(count: int, extra: bool = False) -> Graph:
