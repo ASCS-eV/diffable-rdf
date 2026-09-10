@@ -58,6 +58,13 @@ affected artifact, commit it once, and subsequent runs are stable again.
   graph takes the fallback precisely because it holds a term that is not one.
   The error names the term and the formats that can carry the graph: `turtle`,
   `trig`, `xml` and `json-ld` all work, since Turtle permits relative IRIs.
+- **`deterministic_json` raises for two dict keys that encode to the same JSON
+  name**, such as `{1: "a", "1": "b"}`, instead of writing that name twice as
+  `json.dumps` does. One object cannot carry a name twice: `json.loads` keeps
+  only the last entry, so the text could not be read back, and the two items
+  tie under the sort, so the equal dicts `{1: "a", "1": "b"}` and
+  `{"1": "b", 1: "a"}` rendered differently — the one guarantee this function
+  makes. Use string keys.
 
 ### Added
 
@@ -122,6 +129,28 @@ affected artifact, commit it once, and subsequent runs are stable again.
   rdflib's value-space comparison, which is neither total nor defined for that
   pair. Output is unchanged for graphs that already worked.
 
+- **`deterministic_json` no longer reorders an array nested inside an ordered
+  array.** Only the outer array was protected, so `{"@list": [["b", "a"], "c"]}`
+  had its inner array sorted — and a nested array expands to a nested list, so
+  that changed the RDF. The protection now follows array items; it still stops
+  at a dict, which begins a fresh node object.
+- **A `@context` term may name an alias declared after it.** Key order inside a
+  `@context` object carries no meaning — Create Term Definition (JSON-LD 1.1
+  API §4.2.2) keeps a `defined` map and resolves a referenced term recursively
+  — but the object was folded once, front to back, so `{"payload": {"@type":
+  "jsn"}, "jsn": "@json"}` left an ordered `@json` payload looking unordered
+  and it got sorted, changing the RDF.
+- **Non-string dict keys sort by the name the encoder writes.** Sorting used
+  `str(key)`, but `json.dumps` writes a float key through `floatstr` and an int
+  key through `int.__repr__`, so `float("inf")` is emitted as `Infinity` while
+  it sorted as `inf`: the object came out in an order its own key names do not
+  have.
+- **`nt` and `nquads` refuse an IRI that has a scheme but is not a valid IRI.**
+  The representability check was a regex for a leading `scheme:`, which
+  `http://ex/%zz`, `http://ex/a#b#c` and `http://ex/a[1]` all pass, so the term
+  was written out and pyoxigraph raised a syntax error on line 1 of the result.
+  The check now asks pyoxigraph, which implements the grammar. N-Triples 1.1
+  §2.2 admits only IRIs.
 - Two triples differing only in a literal's lexical form are no longer merged
   into one.
 - A graph with a shared `rdf:List` tail no longer loses or duplicates cells on
