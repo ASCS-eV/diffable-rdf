@@ -51,7 +51,7 @@ from rdflib.compare import to_canonical_graph
 from .expanded_jsonld import _is_absolute_iri, serialize_expanded_jsonld
 from .graph_input import _require_single_graph
 from .jsonld import deterministic_json
-from .namespaces import prepare_namespaces
+from .namespaces import bind_source_namespaces, prepare_namespaces
 
 logger = logging.getLogger(__name__)
 
@@ -473,7 +473,11 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         canonical = Graph(bind_namespaces="none")
         for triple in canonicalized:
             canonical.add(triple)
-        prepare_namespaces(canonical, graph)
+        # Bindings only: the Turtle-family serializer generates prefixes for
+        # the positions where a prefixed name is safe, and does so in a stable
+        # order of its own. Splitting every term here instead would invent a
+        # namespace for a subject or object it would have written in full.
+        bind_source_namespaces(canonical, graph)
         # Imported here, not at module level: diffable_rdf.turtle imports this
         # module from inside deterministic_turtle, so importing it back at
         # module level here would create an import cycle. Deferring the

@@ -313,7 +313,8 @@
       "evidence": {
         "positive": [
           "tests/serialization/test_literal_fidelity.py::test_serialization_does_not_mutate_input_or_global_normalization",
-          "tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position"
+          "tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position",
+          "tests/serialization/test_namespace_term_positions.py::test_the_caller_graph_and_its_bindings_are_untouched"
         ],
         "boundary": [
           "tests/serialization/test_xml_fidelity.py::test_rdf_xml_is_stable_and_does_not_mutate_input_or_global_settings",
@@ -930,7 +931,7 @@
     },
     {
       "id": "TURTLE-NAMES",
-      "description": "Punctuation, Unicode-prefix and overlapping-prefix examples preserve subject, predicate, object and datatype IRIs.",
+      "description": "Punctuation, Unicode-prefix, overlapping-prefix and unprefixable IRI examples preserve subject, predicate, object and datatype IRIs.",
       "features": [
         "deterministic_turtle",
         "canonicalize_rdf_graph",
@@ -970,11 +971,15 @@
       "evidence": {
         "positive": [
           "tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position",
-          "tests/serialization/test_prefixed_names.py::test_overlapping_prefixes_and_aliases_remain_optional"
+          "tests/serialization/test_prefixed_names.py::test_overlapping_prefixes_and_aliases_remain_optional",
+          "tests/serialization/test_namespace_term_positions.py::test_deterministic_turtle_writes_a_split_hostile_iri_in_every_position",
+          "tests/serialization/test_namespace_term_positions.py::test_the_canonicalizer_writes_a_split_hostile_iri_in_every_position"
         ],
         "boundary": [
           "tests/serialization/test_prefixed_names.py::test_curie_looking_literal_content_is_data",
-          "tests/serialization/test_prefixed_names.py::test_deterministic_turtle_preserves_curie_looking_literal_content"
+          "tests/serialization/test_prefixed_names.py::test_deterministic_turtle_preserves_curie_looking_literal_content",
+          "tests/serialization/test_namespace_term_positions.py::test_the_degraded_path_writes_a_split_hostile_iri_in_every_position",
+          "tests/serialization/test_namespace_term_positions.py::test_a_split_hostile_predicate_is_refused_rather_than_written_invalidly"
         ]
       },
       "not_applicable": {
@@ -1082,7 +1087,7 @@
     },
     {
       "id": "NAMESPACES-ISOLATION",
-      "description": "Namespace selection preserves caller bindings, reserves generated names and remains stable across processes in checked graph shapes.",
+      "description": "Namespace selection preserves caller bindings, reserves generated names, generates them only where the serializer asks, and remains stable across processes in checked graph shapes.",
       "features": [
         "deterministic_turtle",
         "canonicalize_rdf_graph"
@@ -1090,6 +1095,11 @@
       "category": "policy",
       "clauses": [],
       "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.namespaces:bind_source_namespaces",
+          "path": "src/diffable_rdf/namespaces.py"
+        },
         {
           "role": "local",
           "target": "diffable_rdf.namespaces:prepare_namespaces",
@@ -1100,17 +1110,24 @@
       "reason": null,
       "evidence": {
         "positive": [
-          "tests/serialization/test_namespace_determinism.py::test_caller_prefixes_are_preserved_and_generated_names_are_reserved"
+          "tests/serialization/test_namespace_determinism.py::test_caller_prefixes_are_preserved_and_generated_names_are_reserved",
+          "tests/serialization/test_namespace_term_positions.py::test_only_the_predicate_position_earns_a_generated_prefix",
+          "tests/serialization/test_namespace_term_positions.py::test_a_bound_namespace_is_used_in_every_position",
+          "tests/serialization/test_namespace_term_positions.py::test_generated_names_follow_the_graph_not_its_insertion_order"
         ],
         "negative": [
           "tests/serialization/test_namespace_determinism.py::test_an_undeclarable_binding_preserves_usable_prefixes"
         ],
         "boundary": [
           "tests/serialization/test_namespace_determinism.py::test_deterministic_turtle_degraded_path_keeps_graph_and_bindings",
-          "tests/serialization/test_namespace_determinism.py::test_the_prefix_filter_matches_what_pyoxigraph_will_accept"
+          "tests/serialization/test_namespace_determinism.py::test_the_prefix_filter_matches_what_pyoxigraph_will_accept",
+          "tests/serialization/test_namespace_term_positions.py::test_a_keyword_predicate_declares_nothing",
+          "tests/serialization/test_namespace_term_positions.py::test_preprocessing_presents_every_triple_exactly_once",
+          "tests/serialization/test_namespace_term_positions.py::test_a_format_without_positional_discovery_preallocates_in_iri_order"
         ],
         "subprocess": [
-          "tests/serialization/test_namespace_determinism.py::test_namespace_allocation_is_stable_across_processes"
+          "tests/serialization/test_namespace_determinism.py::test_namespace_allocation_is_stable_across_processes",
+          "tests/serialization/test_namespace_term_positions.py::test_split_hostile_output_is_stable_across_processes"
         ]
       },
       "not_applicable": {
