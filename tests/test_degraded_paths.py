@@ -370,11 +370,25 @@ def test_wl_signatures_stay_bounded_under_many_iterations():
     label width cannot detect this — only memory can. The subprocess runs
     under a hard address-space cap so the regression surfaces as a clean
     failure instead of an OOM kill.
+
+    Where that cap cannot be imposed the test skips rather than fails.
+    ``resource`` is Unix-only, and macOS rejects ``RLIMIT_AS`` outright
+    ("current limit exceeds maximum limit"), so both platforms were reporting
+    a library defect for something the harness could not measure. Exit code 77
+    distinguishes "cannot measure here" from a real breach of the budget.
     """
     script = textwrap.dedent(
         """
-        import resource
-        resource.setrlimit(resource.RLIMIT_AS, (1536 * 1024 * 1024,) * 2)
+        import sys
+
+        try:
+            import resource
+
+            resource.setrlimit(resource.RLIMIT_AS, (1536 * 1024 * 1024,) * 2)
+        except (ImportError, ValueError, OSError):
+            # No `resource` module (Windows), or the platform refuses an
+            # address-space limit (macOS). Nothing to measure here.
+            sys.exit(77)
 
         import pyoxigraph as ox
         from rdflib import BNode, Graph, Namespace
@@ -402,6 +416,8 @@ def test_wl_signatures_stay_bounded_under_many_iterations():
     result = subprocess.run(
         [sys.executable, "-c", script], capture_output=True, text=True, timeout=300
     )
+    if result.returncode == 77:
+        pytest.skip("this platform cannot cap a process's address space")
     assert result.returncode == 0, (
         "WL refinement exceeded its memory budget; signatures are growing "
         f"per round instead of staying hashed: {result.stderr[-500:]}"
