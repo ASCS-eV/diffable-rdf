@@ -7,6 +7,7 @@ coupling independent concerns.
 | Group | Responsibility | Primary dimensions |
 | --- | --- | --- |
 | `harness/` | Test-target selection and child-process isolation | source and wheel provenance, interpreter configuration |
+| `standards/` | Pinned reference integrity and standards evidence | document identities, source provenance, licenses, digests, clause anchors |
 | `contracts/` | Public API, accepted graph inputs, format names, and output framing | exports, annotations, input coercion, format guarantees |
 | `serialization/` | RDF document fidelity and serializer fallbacks | bases, namespaces, literals, XML, list identity, process determinism |
 | `properties/` | Seeded graph invariants | losslessness, idempotence, label independence, insertion-order independence |
@@ -67,3 +68,14 @@ Run focused groups with standard pytest selection, for example:
 ```bash
 uv run --frozen pytest -q --package-under-test=source tests/serialization tests/wl
 ```
+
+Verify the [standards reference collection](../docs/standards/README.md) without
+network access or optional packages:
+
+```bash
+python scripts/check_standards.py
+```
+
+The same reference checks run in `standards/` under both source and installed
+targets. They establish the integrity of the reference evidence, not complete
+implementation of every clause of each copied specification.

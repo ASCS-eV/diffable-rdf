@@ -8,7 +8,7 @@ Public API:
     deterministic_turtle(graph)
         Diff-stable, idiomatic Turtle. The usual entry point.
     canonicalize_rdf_graph(graph, output_format="turtle")
-        RDFC-1.0 canonical serialization in Turtle, N-Triples, N-Quads,
+        Deterministic serialization using RDFC-1.0 labels in Turtle, N-Triples, N-Quads,
         RDF/XML, TriG, N3 or JSON-LD. Any other format name is delegated to
         rdflib with no determinism guarantee.
     deterministic_json(obj, indent=3, preserve_list_order_keys=None)
@@ -22,6 +22,8 @@ Public API:
         Those labels, applied to a new list of quads.
 
 Contracts, error cases and per-format behavior are documented in docs/api.md.
+The standards profile in docs/standards/README.md distinguishes dependency
+labeling from standardized canonical N-Quads bytes and project-specific output.
 """
 
 from __future__ import annotations

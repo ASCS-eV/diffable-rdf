@@ -72,6 +72,7 @@ include = [
     "src/diffable_rdf",
     "tests",
     "docs/api.md",
+    "docs/standards",
     "CHANGELOG.md",
     "README.md",
     "LICENSE",

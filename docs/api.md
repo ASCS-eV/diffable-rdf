@@ -22,7 +22,7 @@ sample data.
 ## Contents
 
 - [`deterministic_turtle`](#deterministic_turtle) — diff-stable Turtle
-- [`canonicalize_rdf_graph`](#canonicalize_rdf_graph) — canonical form in other formats
+- [`canonicalize_rdf_graph`](#canonicalize_rdf_graph) — deterministic serialization in other formats
 - [`deterministic_json`](#deterministic_json) — ordering a JSON or JSON-LD document
 - [`well_known_prefix_map`](#well_known_prefix_map) — namespace IRI to standard prefix
 - [`wl_blank_node_labels`](#wl_blank_node_labels) — diff-stable labels for canonical quads
@@ -49,11 +49,14 @@ named-node IRIs; re-serialization through rdflib's Turtle writer, which
 recovers inline blank nodes `[ … ]`, collection syntax `( … )` and prefix
 declarations limited to the namespaces the graph uses.
 
-The rendered text is re-parsed and compared with the input as RDFC-1.0
-canonical forms. RDFC-1.0 ([RDF Dataset Canonicalization][rdfc], a W3C
-Recommendation of 21 May 2024) produces one canonical form per isomorphism
-class, so comparing those forms is an exact isomorphism test in the sense of
-[RDF 1.1 Concepts §3.6][concepts]. Turtle's `( … )` syntax can only
+The rendered text is re-parsed and compared with the input using sorted RDF
+term strings after pyoxigraph's RDFC-1.0 labeling. This internal comparison
+key tests graph isomorphism in the sense of
+[RDF 1.1 Concepts §3.6][graph-comparison]; it is not the standardized
+canonical N-Quads byte representation. The WL-relabelled Turtle output is
+project-specific presentation, not RDFC canonical bytes. See the
+[standards profile](standards/README.md) and [RDFC §2][rdfc-conformance].
+Turtle's `( … )` syntax can only
 express a list whose tail is referenced once, and canonicalization readily
 produces graphs where several lists share a tail, so when the compact form does
 not round-trip the graph is re-rendered with explicit `rdf:first`/`rdf:rest`
@@ -125,8 +128,13 @@ print(turtle)
 def canonicalize_rdf_graph(graph: rdflib.Graph, output_format: str = "turtle") -> str
 ```
 
-Serializes one graph to a canonical form in the requested format. Use this when
+Serializes one graph deterministically in the requested format. Use this when
 the target is not Turtle, or when RDFC-1.0's own labels are what you want.
+
+Using RDFC-1.0 labels does not promise [canonical N-Quads][rdfc-canonical-quads]
+bytes: the requested syntax, ordering, framing and optional prefix/base
+presentation belong to this library's contract. This single-graph API does
+not expose a standalone RDFC processor or a selectable hash algorithm.
 
 This is the lower-level entry point: blank nodes keep their RDFC-1.0 `c14nN`
 labels, which are deterministic but sequential, so inserting a triple can
@@ -207,6 +215,10 @@ triples of one graph, so quad formats place every statement in the default
 graph and no graph name appears in the output. To keep graph names, relabel
 quads with `wl_relabel_quads` and serialize the dataset with your own
 serializer.
+
+**N3 is the Turtle-compatible RDF graph subset.** The `n3` name does not
+extend the input model to formulas, implications, variables or arbitrary
+Notation3 logic.
 
 **`graph.base` is used on this path**, unlike in `deterministic_turtle`: a base
 IRI is handed to pyoxigraph, which emits a `@base` directive and RFC
@@ -325,8 +337,10 @@ a JSON canonicalization scheme, and not a JSON-LD processor.
 
 `@graph` and `@set` are **not** protected, and their arrays sort like any
 other. JSON-LD arrays carry no order unless a container says they do, and
-`@set` exists to express "an unordered set of data" (JSON-LD 1.1 §1.7, §4.3.2);
-`@list` is the ordered one (§4.3.1). An ordered construct nested inside a
+`@set` is unordered and `@list` is ordered under the normative
+[JSON-LD 1.1 §9.7 Lists and Sets][jsonld-lists]. The separate
+[§4.3 Value Ordering discussion][jsonld-ordering] is informative.
+An ordered construct nested inside a
 `@graph` or `@set` array still keeps its order, because that protection comes
 from the keyword rather than from the enclosing key.
 
@@ -341,8 +355,11 @@ literal payloads, and terms declared with `@container: @list` or
 `@type: @json` in a local `@context` are recognized, including keyword aliases,
 ordered context arrays, inheritance by nested objects, and a `null` reset.
 Key order inside a `@context` object carries no meaning, so a definition may
-name an alias declared after it: Create Term Definition (JSON-LD 1.1 API
-§4.2.2) keeps a `defined` map and resolves a referenced term recursively.
+name an alias declared after it: [JSON-LD 1.1 API §4.2 Create Term
+Definition][jsonld-term-definition] keeps a `defined` map and resolves a
+referenced term recursively. Ordered context processing is specified in
+[§4.1 Context Processing Algorithm][jsonld-context-processing]. Recognizing
+these local ordering rules does not implement the complete API algorithms.
 Remote contexts, `@import`, scoped contexts and definitions whose ordering
 cannot be settled locally are never fetched and mark the value unknown; from
 there every descendant array is left alone, which also covers a `@context: null`
@@ -611,5 +628,12 @@ normalized, `rdflib.compare.isomorphic` — which is stricter than rdflib's own
 non-isomorphic across a tag-case change. It cannot be used to check
 losslessness in that case.
 
-[rdfc]: https://www.w3.org/TR/rdf-canon/
-[concepts]: https://www.w3.org/TR/rdf11-concepts/#section-Graph-Literal
+[rdfc]: https://www.w3.org/TR/2024/REC-rdf-canon-20240521/
+[rdfc-conformance]: https://www.w3.org/TR/2024/REC-rdf-canon-20240521/#conformance
+[rdfc-canonical-quads]: https://www.w3.org/TR/2024/REC-rdf-canon-20240521/#canonical-quads
+[concepts]: https://www.w3.org/TR/2014/REC-rdf11-concepts-20140225/#section-Graph-Literal
+[graph-comparison]: https://www.w3.org/TR/2014/REC-rdf11-concepts-20140225/#section-graph-equality
+[jsonld-lists]: https://www.w3.org/TR/2020/REC-json-ld11-20200716/#lists-and-sets
+[jsonld-ordering]: https://www.w3.org/TR/2020/REC-json-ld11-20200716/#sets-and-lists
+[jsonld-term-definition]: https://www.w3.org/TR/2020/REC-json-ld11-api-20200716/#create-term-definition
+[jsonld-context-processing]: https://www.w3.org/TR/2020/REC-json-ld11-api-20200716/#context-processing-algorithm
