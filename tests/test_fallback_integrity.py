@@ -23,6 +23,7 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.compare import isomorphic
 
 from diffable_rdf import canonicalize_rdf_graph
+from diffable_rdf.canonicalize import _deterministic_fallback_serialize
 
 EX = Namespace("http://example.org/")
 
@@ -43,54 +44,72 @@ UNICODE_BREAKS = [
 LINE_ORIENTED = ["nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"]
 
 
-def _degraded(*extra) -> Graph:
-    """A graph that reaches the fallback, with absolute IRIs throughout.
+# Two ways to reach the fallback. Both are terms rdflib accepts and pyoxigraph
+# rejects, which is what the fallback exists for.
+RELATIVE_IRI = URIRef("relative/thing")
+DOUBLED_FRAGMENT_IRI = URIRef("http://example.org/a#b#c")
 
-    A doubled ``#`` is an IRI rdflib accepts and pyoxigraph rejects, so it
-    forces the fallback while every term stays absolute — which matters,
-    because a relative IRI would make the line-oriented formats refuse before
-    the sort is reached.
-    """
+
+def _degraded(*extra, trigger: URIRef = RELATIVE_IRI) -> Graph:
+    """A graph that reaches the fallback rather than the pyoxigraph path."""
     graph = Graph()
-    graph.add((URIRef("http://example.org/a#b#c"), EX.p, Literal("forces fallback")))
+    graph.add((trigger, EX.p, Literal("forces fallback")))
     for triple in extra:
         graph.add(triple)
     return graph
 
 
+# The line-oriented sort is exercised directly rather than through
+# `canonicalize_rdf_graph`, because no graph can currently reach it that way:
+# a graph takes the fallback only by holding a term N-Triples cannot express,
+# and the representability guard refuses those first. Verified for every
+# trigger there is -- relative IRI, literal predicate, blank-node predicate,
+# and IRIs pyoxigraph rejects (a doubled fragment, a bad percent-escape, a bad
+# host). That guard is defence in depth, not a reason to leave the sort broken:
+# it is one `_FORMAT_MAP` entry away from being reachable again.
 @pytest.mark.parametrize("separator", UNICODE_BREAKS)
-@pytest.mark.parametrize("output_format", LINE_ORIENTED)
-def test_a_literal_carrying_a_unicode_line_break_survives(
+@pytest.mark.parametrize("output_format", ["nt", "nquads"])
+def test_the_line_sort_preserves_a_literal_carrying_a_unicode_break(
     output_format: str, separator: str
 ) -> None:
-    """The value must be preserved and the document must still parse."""
+    """`str.splitlines()` split the statement in two and rewrote the separator."""
     value = Literal("a" + separator + "b")
-    graph = _degraded((EX.s, EX.p, value))
+    graph = Graph()
+    graph.add((EX.s, EX.p, value))
+    graph.add((EX.z, EX.p, Literal("second statement, so the sort has work to do")))
 
-    result = canonicalize_rdf_graph(graph, output_format=output_format)
+    result = _deterministic_fallback_serialize(graph, output_format)
     reparsed = Graph().parse(data=result, format="nt")
 
     assert len(reparsed) == len(graph)
     assert isomorphic(reparsed, graph)
     assert reparsed.value(EX.s, EX.p) == value
+    assert separator in result, "the separator must survive verbatim"
 
 
-@pytest.mark.parametrize("output_format", LINE_ORIENTED)
-def test_line_oriented_output_is_still_sorted(output_format: str) -> None:
+@pytest.mark.parametrize("output_format", ["nt", "nquads"])
+def test_the_line_sort_still_sorts(output_format: str) -> None:
     """The sort is the reason this code exists; it must still happen."""
-    graph = _degraded(
-        (EX.z, EX.p, Literal("last")),
-        (EX.a, EX.p, Literal("first")),
-        (EX.m, EX.p, Literal("middle")),
-    )
+    graph = Graph()
+    for name in ("z", "a", "m"):
+        graph.add((EX[name], EX.p, Literal(name)))
+
     lines = [
-        line
-        for line in canonicalize_rdf_graph(graph, output_format=output_format).splitlines()
+        line for line in _deterministic_fallback_serialize(graph, output_format).split("\n")
         if line.strip()
     ]
 
     assert lines == sorted(lines)
     assert len(lines) == len(graph)
+
+
+@pytest.mark.parametrize("output_format", LINE_ORIENTED)
+def test_the_public_path_refuses_a_degraded_graph_for_line_formats(
+    output_format: str,
+) -> None:
+    """Why the sort is unreachable from outside: the guard gets there first."""
+    with pytest.raises(ValueError, match="absolute IRI"):
+        canonicalize_rdf_graph(_degraded(), output_format=output_format)
 
 
 def test_a_delegated_format_does_not_return_an_empty_document() -> None:
@@ -149,8 +168,14 @@ def test_an_unregistered_format_still_raises_rdflibs_own_error() -> None:
 
 
 def test_the_turtle_family_still_carries_a_degraded_graph() -> None:
-    """The formats the error messages recommend have to actually work."""
-    graph = _degraded((EX.s, EX.p, Literal("a" + "\u2028" + "b")))
+    """The formats the error messages recommend have to actually work.
+
+    The trigger here is the doubled fragment rather than the relative IRI: a
+    relative IRI is resolved against the reader's base, so re-parsing bare
+    text cannot reproduce the source term for any format, which is a property
+    of relative IRIs and not of this code.
+    """
+    graph = _degraded((EX.s, EX.p, Literal("a\u2028b")), trigger=DOUBLED_FRAGMENT_IRI)
 
     for output_format in ("turtle", "ttl", "trig", "n3"):
         result = canonicalize_rdf_graph(graph, output_format=output_format)

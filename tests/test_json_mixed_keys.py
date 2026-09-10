@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import json
 
+import pytest
+
 from diffable_rdf import deterministic_json
 
 
@@ -38,12 +40,31 @@ def test_mixed_key_dictionary_list_permutations_are_deterministic():
     assert reverse == reverse_original
 
 
-def test_mixed_key_dictionary_list_keeps_encoded_key_collisions():
-    rendered = deterministic_json([{1: "number", "1": "string"}, 0])
+def test_encoded_key_collisions_are_refused_not_emitted_twice():
+    """This used to emit the name twice, which broke two promises at once.
 
-    assert rendered.count('"1":') == 2
-    assert '"number"' in rendered
-    assert '"string"' in rendered
+    ``json.dumps({1: "a", "1": "b"})`` writes ``{"1": "a", "1": "b"}``, and
+    ``json.loads`` of that keeps only the last entry -- so the text could not
+    be read back. Worse, the two items tie under the sort key, so the stable
+    sort ordered them by insertion: the equal dicts below rendered
+    differently, contradicting the one guarantee this function makes.
+    """
+    forward = {1: "number", "1": "string"}
+    reverse = {"1": "string", 1: "number"}
+    assert forward == reverse, "equal data, so equal text was promised"
+
+    for document in (forward, reverse, [forward, 0], {"nested": [reverse]}):
+        with pytest.raises(ValueError, match="both encode to the JSON name"):
+            deterministic_json(document)
+
+
+def test_two_distinct_nan_keys_are_refused_as_well():
+    """The collision does not need two different key *types* to happen."""
+    document = {float("nan"): "first", float("nan"): "second"}  # noqa: F601
+    assert len(document) == 2, "distinct NaN objects are distinct dict keys"
+
+    with pytest.raises(ValueError, match="both encode to the JSON name 'NaN'"):
+        deterministic_json(document)
 
 
 def test_custom_preserved_list_keeps_mixed_key_element_order():
@@ -60,3 +81,32 @@ def test_parsed_json_rendering_is_idempotent():
     rendered = deterministic_json(document)
 
     assert deterministic_json(json.loads(rendered)) == rendered
+
+
+def test_non_string_keys_sort_by_the_name_json_writes_not_by_str():
+    """``json.dumps`` coerces keys with its own spellings, not ``str``.
+
+    The encoder writes a float key through ``floatstr`` and an int key through
+    ``int.__repr__``, so ``float("inf")`` is written ``Infinity`` and a subclass
+    that overrides ``__str__`` is still written as its number. Sorting on
+    ``str(key)`` therefore ordered the output by names that were never
+    emitted, and the object came out unsorted.
+    """
+
+    class Numbered(int):
+        def __str__(self) -> str:
+            return "sorts-last-if-str-is-used"
+
+    document = {
+        float("nan"): "nan",
+        float("-inf"): "neg-inf",
+        float("inf"): "inf",
+        Numbered(1): "one",
+        "M": "m",
+        "Zebra": "z",
+    }
+
+    names = list(json.loads(deterministic_json(document)))
+
+    assert names == sorted(names), f"the emitted names are out of order: {names}"
+    assert names == ["-Infinity", "1", "Infinity", "M", "NaN", "Zebra"]

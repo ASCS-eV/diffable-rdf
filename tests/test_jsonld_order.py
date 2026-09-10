@@ -16,6 +16,14 @@ def _graph(document: object) -> Graph:
     return Graph().parse(data=json.dumps(document), format="json-ld")
 
 
+def _lookup(document: object, path: list[str]) -> object:
+    value = document
+    for step in path:
+        assert isinstance(value, dict)
+        value = value[step]
+    return value
+
+
 def _assert_rdf_equivalent(document: object) -> dict[str, object]:
     rendered = deterministic_json(document)
     result = json.loads(rendered)
@@ -216,3 +224,117 @@ def test_context_free_json_still_sorts_lists_and_does_not_mutate_input():
     assert result["payload"]["values"] == [1, 2, 3]
     assert result["custom"] == ["z", "a"]
     assert document == original
+
+
+@pytest.mark.parametrize(
+    ("document", "path"),
+    [
+        pytest.param(
+            {
+                "@context": {"payload": {"@id": "http://ex/payload", "@type": "jsn"}, "jsn": "@json"},
+                "@id": "http://ex/s",
+                "payload": [3, 1, 2],
+            },
+            ["payload"],
+            id="type-json-through-an-alias-declared-later",
+        ),
+        pytest.param(
+            {
+                "@context": {"steps": "lst", "lst": "@list"},
+                "@id": "http://ex/s",
+                "http://ex/p": {"steps": ["c", "a", "b"]},
+            },
+            ["http://ex/p", "steps"],
+            id="list-alias-declared-later",
+        ),
+        pytest.param(
+            {
+                "@context": {"steps": {"@id": "lst"}, "lst": "@list"},
+                "@id": "http://ex/s",
+                "http://ex/p": {"steps": ["c", "a", "b"]},
+            },
+            ["http://ex/p", "steps"],
+            id="list-alias-declared-later-via-id",
+        ),
+    ],
+)
+def test_a_term_definition_may_reference_an_alias_declared_after_it(document, path):
+    """Key order inside a ``@context`` object carries no meaning.
+
+    Create Term Definition (JSON-LD 1.1 API §4.2.2) keeps a ``defined`` map and
+    resolves a referenced term recursively, so a definition may name an alias
+    that appears later in the same object. Folding the object once, front to
+    back, missed those: each of these arrays came out sorted, and each sort
+    changed the RDF.
+    """
+    result = _assert_rdf_equivalent(document)
+
+    assert _lookup(result, path) == _lookup(document, path), "an ordered array was reordered"
+
+
+@pytest.mark.parametrize(
+    ("document", "path"),
+    [
+        pytest.param(
+            {"@id": "http://ex/s", "http://ex/p": {"@list": [["b", "a"], "c"]}},
+            ["http://ex/p", "@list"],
+            id="array-inside-an-explicit-list",
+        ),
+        pytest.param(
+            {
+                "@context": {"l": {"@id": "http://ex/l", "@container": "@list"}},
+                "@id": "http://ex/s",
+                "l": [["b", "a"], ["c"]],
+            },
+            ["l"],
+            id="array-inside-a-list-container",
+        ),
+    ],
+)
+def test_an_array_nested_in_an_ordered_array_keeps_its_order(document, path):
+    """An array inside an ordered array is ordered too.
+
+    A list is *the* ordered container (JSON-LD 1.1 §4.3.1), and a nested array
+    expands to a nested list rather than to a fresh unordered value -- so its
+    order reaches the RDF as ``rdf:first``/``rdf:rest`` structure just the same.
+    The protection was applied only to the outer array, and the inner one was
+    sorted, which changed the RDF.
+    """
+    result = _assert_rdf_equivalent(document)
+
+    assert _lookup(result, path) == _lookup(document, path)
+
+
+def test_a_shadowing_definition_in_a_nested_context_array_keeps_its_order():
+    """``@context`` arrays are processed in order and each entry overrides the last.
+
+    That makes the inner array's order decide which definition of ``x`` wins,
+    so sorting it silently redefined the term.
+    """
+    document = {
+        "@context": [
+            {"x": "http://ex/first"},
+            [{"x": "http://ex/z-loser"}, {"x": "http://ex/a-winner"}],
+        ],
+        "@id": "http://ex/s",
+        "x": "v",
+    }
+
+    result = _assert_rdf_equivalent(document)
+
+    assert result["@context"] == document["@context"]
+    assert "http://ex/a-winner" in json.dumps(_graph(document).serialize(format="nt"))
+
+
+def test_a_dict_inside_an_ordered_array_still_starts_a_sortable_node_object():
+    """The documented boundary: protection stops at a node object.
+
+    A dict nested in a protected array begins a fresh JSON-LD node object, so
+    its own arrays sort again. This is the control for the nested-array fix
+    above -- it must not have widened the protection past a dict.
+    """
+    document = {"@id": "http://ex/s", "http://ex/p": {"@list": [{"http://ex/q": [3, 1, 2]}]}}
+
+    result = _assert_rdf_equivalent(document)
+
+    assert result["http://ex/p"]["@list"][0]["http://ex/q"] == [1, 2, 3]
