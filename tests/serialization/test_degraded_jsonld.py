@@ -8,8 +8,10 @@ import re
 import subprocess
 import sys
 import textwrap
+from io import BytesIO
 from urllib.parse import urljoin
 
+import pyoxigraph as ox
 import pytest
 from rdflib import BNode, Graph, Literal, Namespace, RDF, URIRef, Variable
 from rdflib.compare import isomorphic
@@ -19,6 +21,7 @@ from diffable_rdf import canonicalize_rdf_graph
 
 EX = Namespace("http://example.org/")
 BASE = "https://base.example/root/"
+JSONLD_ALIASES = ["json-ld", "jsonld", "application/ld+json"]
 
 
 def test_degraded_json_ld_is_reproducible_across_processes() -> None:
@@ -164,6 +167,102 @@ def test_degraded_json_ld_preserves_literal_lexical_strings_and_annotations() ->
     assert node[str(EX.label)] == [{"@language": "de-AT", "@value": "Hallo"}]
     assert node[str(RDF.type)] == [{"@id": str(EX.Thing)}]
     assert isinstance(node[str(EX.integer)][0]["@value"], str)
+
+
+@pytest.mark.parametrize("output_format", JSONLD_ALIASES)
+@pytest.mark.parametrize("position", ["subject", "object"])
+@pytest.mark.parametrize("identifier", ["@id", "@type", "@graph", "@foo", "@MiXeDcAsE"])
+def test_degraded_json_ld_rejects_reserved_relative_identifiers(
+    output_format: str,
+    position: str,
+    identifier: str,
+) -> None:
+    """Keyword-shaped relative identifiers cannot become JSON-LD ``@id`` values."""
+    graph = Graph()
+    triple = (
+        (URIRef(identifier), EX.p, Literal("value"))
+        if position == "subject"
+        else (EX.s, EX.p, URIRef(identifier))
+    )
+    graph.add(triple)
+    before = set(graph)
+    bindings = dict(graph.namespaces())
+
+    with pytest.raises(
+        ValueError,
+        match=rf"reserved JSON-LD identifier.*{position} position.*{re.escape(identifier)}",
+    ):
+        canonicalize_rdf_graph(graph, output_format=output_format)
+
+    assert set(graph) == before
+    assert dict(graph.namespaces()) == bindings
+
+
+@pytest.mark.parametrize("output_format", JSONLD_ALIASES)
+@pytest.mark.parametrize("identifier", ["@id", "@type", "@graph", "@foo", "@MiXeDcAsE"])
+def test_degraded_json_ld_preserves_keyword_shaped_literal_text(
+    output_format: str,
+    identifier: str,
+) -> None:
+    """Keyword-shaped text remains a literal value rather than an identifier."""
+    graph = Graph()
+    graph.bind("ex", EX)
+    graph.add((URIRef("relative/literal"), EX.p, Literal(identifier)))
+    before = set(graph)
+    bindings = dict(graph.namespaces())
+
+    document = json.loads(canonicalize_rdf_graph(graph, output_format=output_format))
+    reparsed = Graph().parse(data=json.dumps(document), format="json-ld", publicID=BASE)
+
+    assert document == [
+        {"@id": "relative/literal", str(EX.p): [{"@value": identifier}]}
+    ]
+    assert isomorphic(reparsed, _resolve_relative_nodes(graph))
+    assert set(graph) == before
+    assert dict(graph.namespaces()) == bindings
+
+
+@pytest.mark.parametrize("output_format", JSONLD_ALIASES)
+@pytest.mark.parametrize("position", ["subject", "object"])
+@pytest.mark.parametrize(
+    "identifier",
+    ["./@id", "@id/path", "@id#fragment", "@a1", "https://example.org/@id"],
+)
+def test_degraded_json_ld_preserves_nonkeyword_identifiers_with_an_explicit_base(
+    output_format: str,
+    position: str,
+    identifier: str,
+) -> None:
+    """Non-keyword identifiers stay verbatim and parse against the supplied base."""
+    graph = Graph()
+    graph.bind("ex", EX)
+    subject = identifier if position == "subject" else "relative/subject"
+    obj = identifier if position == "object" else "relative/object"
+    graph.add((URIRef(subject), EX.p, URIRef(obj)))
+    before = set(graph)
+    bindings = dict(graph.namespaces())
+
+    document = json.loads(canonicalize_rdf_graph(graph, output_format=output_format))
+    reparsed = list(
+        ox.parse(
+            BytesIO(json.dumps(document).encode()),
+            format=ox.RdfFormat.JSON_LD,
+            base_iri=BASE,
+        )
+    )
+
+    assert document == [
+        {"@id": subject, str(EX.p): [{"@id": obj}]}
+    ]
+    assert set(reparsed) == {
+        ox.Quad(
+            ox.NamedNode(urljoin(BASE, subject)),
+            ox.NamedNode(str(EX.p)),
+            ox.NamedNode(urljoin(BASE, obj)),
+        )
+    }
+    assert set(graph) == before
+    assert dict(graph.namespaces()) == bindings
 
 
 def test_normal_json_ld_path_still_uses_pyoxigraph(monkeypatch: pytest.MonkeyPatch) -> None:
