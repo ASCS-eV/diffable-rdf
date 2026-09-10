@@ -202,21 +202,22 @@ serializer.
 
 **`graph.base` is used on this path**, unlike in `deterministic_turtle`: a base
 IRI is handed to pyoxigraph, which emits a `@base` directive and RFC
-3986-correct relative references. If pyoxigraph rejects the base or a prefix
-IRI, the call logs a warning and re-serializes without them.
-
-One exception, with a warning: a base containing a **fragment** is not used for
-the Turtle family. RFC 3986 §5.2.2 discards a base's fragment when resolving, so
-`http://ex.org/d#a` under base `http://ex.org/d#` is correctly written `<#a>` —
-but rdflib's parser resolves a fragment reference by concatenation and reads it
-back as `http://ex.org/d##a`, a different IRI in every position. Absolute IRIs
-are written instead, so the output means the same thing to both readers.
+3986-correct relative references. For Turtle, TriG, and N3, valid prefix
+bindings whose namespace equals the base remain available for compact terms.
+Those formats are accepted only after RDFLib and pyoxigraph preserve direct and
+literal-datatype IRI terms.
+If that verification fails, the call logs a warning and makes one further
+rendering without the base IRI while retaining valid prefixes; the second
+rendering must also verify. If pyoxigraph rejects a base or prefix IRI, the call
+logs a warning and serializes without those rejected values.
 
 **RDF/XML.** Literal carriage returns are written as `&#xD;` character
 references, so XML newline normalization cannot turn CR or CRLF into LF. On the
 fallback path the `rdf:Description` elements and the property elements within
 them are sorted, because rdflib's RDF/XML serializer orders both by its own
 graph traversal and RDF/XML gives neither order any meaning.
+RDF/XML base rendering is also verified; when it fails, one no-base rendering
+keeps the same XML namespace selection and must verify before it is returned.
 
 **On the fallback path, every name above works**, and two names for one format
 produce identical bytes. Two of them get there differently: TriG renders as

@@ -17,6 +17,11 @@ about it.
 - `wl_blank_node_labels` and `wl_relabel_quads` now reject embedded
   `pyoxigraph.Triple` terms with `ValueError`. They operate on supported
   top-level quad terms only; direction-tagged literals remain supported.
+- Base rendering is accepted only after RDFLib and pyoxigraph preserve direct
+  and literal-datatype IRI terms. A rendering that does not verify is emitted
+  once more without its base IRI, retaining valid prefixes. Turtle, TriG, and
+  N3 prefix bindings equal to the base remain available for compact terms;
+  RDF/XML keeps its XML namespace selection on the retry.
 - Degraded JSON-LD rejects a relative subject or object identifier exactly
   matching `@[A-Za-z]+`. JSON-LD reserves these strings, so returning them in an `@id`
   value can change or discard a graph term.

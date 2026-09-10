@@ -30,10 +30,9 @@ See ``docs/api.md`` for the full contract.
    ``xsd:decimal`` (``1.23``).  rdflib parses these back with the
    correct datatype, so this is lossless.
 
-4. **Base IRI / prefix collision**: When a graph has ``@base`` and a
-   prefix whose namespace equals the base IRI (e.g. rdflib's auto-bound
-   ``base:`` prefix), pyoxigraph emits CURIEs like ``base:label`` that
-   rdflib rejects.  We skip such prefixes during serialization.
+4. **Base IRI interoperability**: Base-relative output is accepted only after
+   both readers preserve every IRI position. If the Turtle-family rendering
+   fails that check, it is rendered once more without a base IRI.
 
 5. **Trailing escaped dot in PN_LOCAL**: pyoxigraph emits CURIEs like
    ``prefix:local\\.`` for IRIs whose local part ends with ``.``.  This
@@ -736,17 +735,33 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     # reference rdflib mis-resolves would otherwise slip past: pyoxigraph
     # resolves it correctly, so comparing only canonical forms compares two
     # correct readings and sees nothing wrong.
-    source_iris = {str(term) for triple in source for term in triple if isinstance(term, rdflib.URIRef)}
-    reparsed_iris = {
-        str(term) for triple in reparsed for term in triple if isinstance(term, rdflib.URIRef)
-    }
-    invented = reparsed_iris - source_iris
-    if invented:
+    def iri_sets(graph: rdflib.Graph) -> tuple[set[str], set[str]]:
+        """Return direct IRI terms and literal datatype IRIs separately."""
+        direct: set[str] = set()
+        datatypes: set[str] = set()
+        for triple in graph:
+            for term in triple:
+                if isinstance(term, rdflib.URIRef):
+                    direct.add(str(term))
+                elif isinstance(term, rdflib.Literal) and term.datatype is not None:
+                    datatypes.add(str(term.datatype))
+        # RDF 1.1 treats a plain string and an xsd:string literal as the same
+        # literal. Keep that allowance local to datatype positions: an
+        # xsd:string URIRef used directly in a triple remains significant.
+        datatypes.discard(str(rdflib.XSD.string))
+        return direct, datatypes
+
+    source_direct, source_datatypes = iri_sets(source)
+    reparsed_direct, reparsed_datatypes = iri_sets(reparsed)
+    missing = (source_direct - reparsed_direct) | (source_datatypes - reparsed_datatypes)
+    invented = (reparsed_direct - source_direct) | (reparsed_datatypes - source_datatypes)
+    if missing or invented:
+        direction = "loses" if missing else "reads back"
+        changed = missing if missing else invented
         raise ValueError(
-            f"canonical {output_format} serialization does not round-trip: rdflib reads back "
-            f"{len(invented)} IRI(s) the input graph does not contain, such as "
-            f"{sorted(invented)[0]!r}. This is a bug in diffable-rdf: please report it with "
-            "the input graph."
+            f"canonical {output_format} serialization does not round-trip: rdflib {direction} "
+            f"{len(changed)} IRI(s), such as {sorted(changed)[0]!r}. This is a bug in "
+            "diffable-rdf: please report it with the input graph."
         )
 
     # It normalizes numeric lexical forms, so use pyoxigraph's parsed terms for
@@ -866,22 +881,6 @@ def canonicalize_rdf_graph(
 
     # 5. Collect prefixes for formats that support them.
     base_iri = str(graph.base) if graph.base else None
-    if base_iri is not None and "#" in base_iri and ox_format in _TURTLE_FAMILY_FORMATS:
-        # A base with a fragment cannot be used for relativization that rdflib
-        # can read back. pyoxigraph correctly writes <#a> for
-        # http://ex.org/d#a under base http://ex.org/d#, per RFC 3986 section
-        # 5.2.2, which discards the base's fragment. rdflib's notation3 parser
-        # instead concatenates, yielding http://ex.org/d##a -- a different IRI
-        # in every position. deterministic_turtle drops the base outright for
-        # this reason; dropping it just for a fragment base keeps ordinary
-        # bases working while emitting nothing rdflib will misread.
-        logger.warning(
-            "graph.base %r contains a fragment; emitting absolute IRIs instead of "
-            "relativizing, because rdflib's parser resolves a fragment-relative "
-            "reference by concatenation rather than per RFC 3986.",
-            base_iri,
-        )
-        base_iri = None
     prefixes: dict[str, str] | None = None
     if ox_format in _PREFIX_FORMATS:
         prefixes = {}
@@ -889,10 +888,14 @@ def canonicalize_rdf_graph(
             if not prefix:  # skip empty prefix (base)
                 continue
             ns_str = str(namespace)
-            # Skip prefixes whose namespace matches the base IRI to avoid
-            # pyoxigraph emitting CURIEs like `base:label` that conflict
-            # with the @base directive.
-            if base_iri and ns_str == base_iri:
+            # Equal-base bindings are emitted only in Turtle-family formats,
+            # where CURIE terms preserve their namespace without a relative
+            # XML namespace declaration.
+            if (
+                base_iri
+                and ns_str == base_iri
+                and ox_format not in _TURTLE_FAMILY_FORMATS
+            ):
                 continue
             # Skip a namespace pyoxigraph cannot declare as a prefix.  The
             # recovery below drops *all* prefixes, so letting one unusable
@@ -907,6 +910,7 @@ def canonicalize_rdf_graph(
         # them.
         prefixes = _filter_prefixes_to_used(prefixes, _iri_terms(sorted_triples))
     used_prefixes = prefixes
+    used_base_iri = base_iri
     try:
         result_bytes = ox.serialize(
             sorted_triples,
@@ -927,21 +931,43 @@ def canonicalize_rdf_graph(
             format=ox_format,
         )
         used_prefixes = None
+        used_base_iri = None
     # pyoxigraph's serialize() stub is a single flat `-> bytes | None` with no
     # overload distinguishing output=None (returns bytes) from output=<stream>
     # (returns None). Neither call above passes output=, so this is always bytes.
-    result = result_bytes.decode("utf-8")  # type: ignore[union-attr]
-    if ox_format == ox.RdfFormat.RDF_XML:
-        result = _finalize_rdf_xml(result)
-    if ox_format == ox.RdfFormat.JSON_LD:
-        # pyoxigraph emits compact single-line JSON; re-render it indented so
-        # the output is diffable line by line, which is the point of this
-        # library. Safe to route through deterministic_json: pyoxigraph writes
-        # *expanded* JSON-LD, so there is no @context or @list array whose
-        # order carries meaning, and the triples were already sorted above.
-        result = deterministic_json(json.loads(result)) + "\n"
-    if ox_format in _TURTLE_FAMILY_FORMATS and used_prefixes:
-        result = _expand_trailing_dot_curies(result, used_prefixes)
+    def render(result_bytes: bytes, render_prefixes: dict[str, str] | None) -> str:
+        result = result_bytes.decode("utf-8")
+        if ox_format == ox.RdfFormat.RDF_XML:
+            result = _finalize_rdf_xml(result)
+        if ox_format == ox.RdfFormat.JSON_LD:
+            # pyoxigraph emits compact single-line JSON; re-render it indented so
+            # the output is diffable line by line, which is the point of this
+            # library. Safe to route through deterministic_json: pyoxigraph writes
+            # *expanded* JSON-LD, so there is no @context or @list array whose
+            # order carries meaning, and the triples were already sorted above.
+            result = deterministic_json(json.loads(result)) + "\n"
+        if ox_format in _TURTLE_FAMILY_FORMATS and render_prefixes:
+            result = _expand_trailing_dot_curies(result, render_prefixes)
+        return result
+
+    assert result_bytes is not None
+    result = render(result_bytes, used_prefixes)
     if ox_format in _VERIFIED_FORMATS:
-        _assert_round_trips(graph, result, output_format)
+        try:
+            _assert_round_trips(graph, result, output_format)
+        except ValueError:
+            if used_base_iri is None:
+                raise
+            logger.warning(
+                "base IRI %r failed round-trip verification; serializing without it",
+                used_base_iri,
+            )
+            retry_bytes = ox.serialize(
+                sorted_triples,
+                format=ox_format,
+                prefixes=used_prefixes,
+            )
+            assert retry_bytes is not None
+            result = render(retry_bytes, used_prefixes)
+            _assert_round_trips(graph, result, output_format)
     return _with_single_trailing_newline(result)
