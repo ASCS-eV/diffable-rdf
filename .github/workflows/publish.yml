@@ -36,13 +36,18 @@ jobs:
         run: |
           # --locked checks the committed metadata before the --frozen run.
           uv sync --locked --group dev
-          uv run --frozen pytest -q
+          uv run --frozen pytest -q --package-under-test=source
 
       - name: Build sdist + wheel
         run: uv build
 
       - name: Check metadata
         run: uv run --with twine python -m twine check dist/*
+
+      - name: Test the built wheel in a clean environment
+        run: |
+          wheel_version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' src/diffable_rdf/__init__.py)"
+          uv run --frozen python scripts/test_wheel.py "dist/diffable_rdf-${wheel_version}-py3-none-any.whl"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

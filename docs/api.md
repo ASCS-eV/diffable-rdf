@@ -2,6 +2,8 @@
 
 `diffable-rdf` exports six functions and `__version__`:
 
+<!-- example -->
+
 ```python
 from diffable_rdf import (
     canonicalize_rdf_graph,
@@ -29,6 +31,8 @@ sample data.
 - [What reproducibility depends on](#what-reproducibility-depends-on)
 
 ## deterministic_turtle
+
+<!-- signature -->
 
 ```python
 def deterministic_turtle(graph: rdflib.Graph) -> str
@@ -86,6 +90,8 @@ processes — but it is not WL-relabelled, so it is not diff-stable, and it is
 rendered without `( … )` because this path has no round-trip check to fall
 back on. Relative IRIs are passed through verbatim rather than resolved.
 
+<!-- example -->
+
 ```python
 from rdflib import BNode, Graph, Literal, Namespace, RDF
 
@@ -112,6 +118,8 @@ print(turtle)
 ```
 
 ## canonicalize_rdf_graph
+
+<!-- signature -->
 
 ```python
 def canonicalize_rdf_graph(graph: rdflib.Graph, output_format: str = "turtle") -> str
@@ -260,6 +268,8 @@ cycles keep their identity. Within that fallback:
   output is produced. This keeps the fallback inside an interoperable
   standard-RDF subset instead of relying on optional generalized-RDF support.
 
+<!-- example -->
+
 ```python
 from rdflib import Graph, Literal, Namespace
 
@@ -277,6 +287,8 @@ for output_format in ("turtle", "nt", "xml", "json-ld"):
 ```
 
 ## deterministic_json
+
+<!-- signature -->
 
 ```python
 def deterministic_json(
@@ -352,6 +364,8 @@ Use string keys. Tuples are another encoder extension: they are
 written as arrays but are not recursed into, so their contents keep the order
 you built them in.
 
+<!-- example -->
+
 ```python
 import json
 
@@ -373,6 +387,8 @@ assert json.loads(deterministic_json(document))["counts"] == [1, 10, 2]
 
 ## well_known_prefix_map
 
+<!-- signature -->
+
 ```python
 def well_known_prefix_map() -> dict[str, str]
 ```
@@ -383,6 +399,8 @@ alias to the conventional name, for example `sdo` to `schema` for
 `https://schema.org/`. The exact set is rdflib's, and grows with rdflib
 releases.
 
+<!-- example -->
+
 ```python
 from diffable_rdf import well_known_prefix_map
 
@@ -392,6 +410,8 @@ print(prefixes["http://www.w3.org/ns/shacl#"])  # sh
 ```
 
 ## wl_blank_node_labels
+
+<!-- signature -->
 
 ```python
 def wl_blank_node_labels(quads: list, iterations: int | None = None) -> dict[str, str]
@@ -442,6 +462,8 @@ on offer is between unrelated regions of a graph, not within one.
 
 ## wl_relabel_quads
 
+<!-- signature -->
+
 ```python
 def wl_relabel_quads(quads: list, iterations: int | None = None) -> list
 ```
@@ -465,6 +487,8 @@ that.
 
 A complete reproducible dataset needs the sort too: relabelling makes the
 identifiers stable, and sorting makes their order stable.
+
+<!-- example -->
 
 ```python
 import pyoxigraph as ox
@@ -493,6 +517,8 @@ non-ASCII IRIs and labels on an ASCII default, and writing in place truncates
 the existing file before the new content is known to be complete. Encode UTF-8
 explicitly, write a sibling temporary file, and rename it over the target —
 `os.replace` is atomic on the same filesystem.
+
+<!-- example -->
 
 ```python
 import os
