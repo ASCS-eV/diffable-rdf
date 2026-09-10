@@ -196,34 +196,158 @@ def _finalize_rdf_xml(serialized: str) -> str:
     return serialized.replace("\r", "&#xD;")
 
 
-def _sort_rdf_xml_elements(parent: ElementTree.Element, indent: str, closing: str) -> None:
-    """Order ``parent``'s children and re-indent them, in place.
+_XmlSortKey = tuple[str, tuple[tuple[str, str], ...], str, tuple["_XmlSortKey", ...]]
 
-    Whitespace is reset rather than carried: an element's trailing text travels
-    with it, so reordering alone would move the indentation around and leave
-    the output varying by whitespace instead of by element order.
+
+def _element_sort_key(element: ElementTree.Element) -> _XmlSortKey:
+    """Order an RDF/XML element by predicate first, then by what it says.
+
+    For the ``rdf:Description`` elements the tag is always the same, so the
+    order falls to the attributes: ``rdf:about`` sorts before ``rdf:nodeID``,
+    which puts IRI subjects before blank-node subjects and each group in value
+    order -- the same arrangement the line-oriented formats get from sorting
+    their lines, where ``<`` precedes ``_``.
+
+    For the property elements inside them the tag *is* the predicate, so it
+    leads. The earlier key led with any ``rdf:about``/``rdf:nodeID`` it found,
+    which for a property element is the *object's* identity: properties were
+    ordered by the blank-node label of their object before their predicate, so
+    a label change anywhere in the graph reshuffled unrelated properties and
+    turned a one-line edit into a large diff.
+
+    The key is built from the parsed element rather than from re-serializing
+    it, so it cannot depend on which prefix names a serializer would choose.
     """
-    def key(element: ElementTree.Element) -> tuple[str, str, str]:
-        identity = ""
-        for attribute, value in sorted(element.attrib.items()):
-            if attribute.endswith("}about") or attribute.endswith("}nodeID"):
-                identity = value
-                break
-        # The serialized element breaks ties, so the order is total even for
-        # elements with no identifying attribute -- property elements, whose
-        # identity is their predicate and value.
-        return identity, element.tag, ElementTree.tostring(element, encoding="unicode")
+    return (
+        element.tag,
+        tuple(sorted(element.attrib.items())),
+        element.text or "",
+        tuple(_element_sort_key(child) for child in element),
+    )
 
-    children = sorted(parent, key=key)
-    if not children:
-        return
-    for child in list(parent):
-        parent.remove(child)
-    parent.extend(children)
-    parent.text = indent
-    for child in children[:-1]:
-        child.tail = indent
-    children[-1].tail = closing
+
+def _xml_markup_end(text: str, start: int) -> int:
+    """Return the index just past the markup construct beginning at ``start``.
+
+    Attribute values are skipped as quoted strings: XML's ``AttValue``
+    forbids ``<`` but permits ``>``, so scanning for the first ``>`` would
+    stop inside one.
+    """
+    for opening, closing in (("<!--", "-->"), ("<![CDATA[", "]]>"), ("<?", "?>")):
+        if text.startswith(opening, start):
+            found = text.find(closing, start + len(opening))
+            return len(text) if found == -1 else found + len(closing)
+
+    index = start + 1
+    quote = ""
+    while index < len(text):
+        character = text[index]
+        if quote:
+            if character == quote:
+                quote = ""
+        elif character in "\"'":
+            quote = character
+        elif character == ">":
+            return index + 1
+        index += 1
+    return len(text)
+
+
+def _xml_child_spans(text: str, start: int, end: int) -> list[tuple[int, int]]:
+    """Return half-open spans of the element children of ``text[start:end]``.
+
+    A text node cannot contain a raw ``<`` and neither can an attribute value,
+    so the tags found at depth zero are the children's own -- no XML parser is
+    needed to find where each child begins and ends, and working on spans lets
+    the caller move a child's original bytes rather than re-emit it.
+    """
+    spans: list[tuple[int, int]] = []
+    index = start
+    depth = 0
+    opened = start
+    while index < end:
+        if text[index] != "<":
+            index += 1
+            continue
+        markup_end = _xml_markup_end(text, index)
+        if text.startswith("</", index):
+            depth -= 1
+            if depth == 0:
+                spans.append((opened, markup_end))
+        elif text.startswith(("<!", "<?"), index):
+            pass  # A comment, CDATA section or processing instruction.
+        elif text[markup_end - 2 : markup_end] == "/>":
+            if depth == 0:
+                spans.append((index, markup_end))
+        else:
+            if depth == 0:
+                opened = index
+            depth += 1
+        index = markup_end
+    return spans
+
+
+def _sorted_xml_children(text: str, start: int, end: int, element: ElementTree.Element) -> str:
+    """Return ``text[start:end]`` with ``element``'s children in sorted order.
+
+    The children are moved as spans of the original document, so every byte a
+    child contains -- its prefix names, its escaping, its whitespace -- is the
+    serializer's own. The gaps between children stay where they are, which
+    keeps the indentation attached to positions rather than to elements.
+    """
+    spans = _xml_child_spans(text, start, end)
+    children = list(element)
+    if not spans or len(spans) != len(children):
+        # The scan and the parse disagree about the document's shape. Return it
+        # untouched rather than move bytes on a pairing that may be wrong.
+        return text[start:end]
+
+    rendered = [
+        _sorted_xml_element(text, span_start, span_end, child)
+        for (span_start, span_end), child in zip(spans, children, strict=True)
+    ]
+    gaps = [text[spans[index][1] : spans[index + 1][0]] for index in range(len(spans) - 1)]
+    order = sorted(range(len(children)), key=lambda index: _element_sort_key(children[index]))
+
+    pieces = [text[start : spans[0][0]]]
+    for position, index in enumerate(order):
+        pieces.append(rendered[index])
+        if position < len(gaps):
+            pieces.append(gaps[position])
+    pieces.append(text[spans[-1][1] : end])
+    return "".join(pieces)
+
+
+def _sorted_xml_element(text: str, start: int, end: int, element: ElementTree.Element) -> str:
+    """Return the element at ``text[start:end]`` with its own children sorted."""
+    if text[end - 2 : end] == "/>":
+        return text[start:end]
+    open_end = _xml_markup_end(text, start)
+    # The element's own end tag is the last tag in its span: a text node cannot
+    # contain a raw ``<``, so no earlier ``</`` can belong to anything else.
+    close_start = text.rindex("</", start, end)
+    return (
+        text[start:open_end]
+        + _sorted_xml_children(text, open_end, close_start, element)
+        + text[close_start:end]
+    )
+
+
+def _xml_root_start(text: str) -> int | None:
+    """Return the index of the root element's start tag, or None if there is none.
+
+    Everything before it -- the XML declaration, any comment or processing
+    instruction, whitespace -- is kept verbatim.
+    """
+    index = 0
+    while index < len(text):
+        if text[index] != "<":
+            index += 1
+            continue
+        if not text.startswith(("<!", "<?"), index):
+            return index
+        index = _xml_markup_end(text, index)
+    return None
 
 
 def _sort_rdf_xml_descriptions(serialized: str) -> str:
@@ -240,9 +364,13 @@ def _sort_rdf_xml_descriptions(serialized: str) -> str:
     This is the same compensation the line-oriented branch already applies by
     sorting N-Triples lines, against the same serializer's instability.
 
-    Parsed with ElementTree rather than rewritten as text, because element
-    order is a structural property and a regex over serialized RDF reaches into
-    content it should not.
+    The document is parsed to decide the order and then *not* re-serialized:
+    each element is moved as a span of the original text. Re-serializing it
+    through ``ElementTree`` looked simpler and cost two things. It resolved
+    prefixes from ``ElementTree``'s process-global registry, so the caller's
+    ``beta:`` came back as ``ns1:`` -- and any other code in the process
+    calling ``ElementTree.register_namespace`` changed this library's output
+    bytes, which is exactly the property it exists to provide.
 
     rdflib's *plain* XML serializer emits neither ``rdf:parseType="Collection"``
     nor ``parseType="Literal"`` -- only its pretty-printing serializer does, and
@@ -254,14 +382,10 @@ def _sort_rdf_xml_descriptions(serialized: str) -> str:
     if any(name.endswith("}parseType") for element in root.iter() for name in element.attrib):
         return serialized
 
-    _sort_rdf_xml_elements(root, "\n  ", "\n")
-    for description in root:
-        _sort_rdf_xml_elements(description, "\n    ", "\n  ")
-
-    # Keep the declaration rdflib wrote; ElementTree does not reproduce it.
-    declaration, newline, _ = serialized.partition("\n")
-    body = ElementTree.tostring(root, encoding="unicode")
-    return f"{declaration}{newline}{body}" if declaration.startswith("<?xml") else body
+    start = _xml_root_start(serialized)
+    if start is None:
+        return serialized
+    return serialized[:start] + _sorted_xml_element(serialized, start, len(serialized), root)
 
 
 def _first_term_n_triples_cannot_write(
@@ -770,8 +894,11 @@ def canonicalize_rdf_graph(
         )
         result = _deterministic_fallback_serialize(graph, output_format)
         if ox_format == ox.RdfFormat.RDF_XML:
-            # Sort before protecting the CRs: the sort re-serializes the tree,
-            # which would undo a character reference written earlier.
+            # The order of these two no longer matters -- the sort moves spans
+            # of rdflib's text and leaves its escaping alone. rdflib writes a
+            # literal CR as ``&#13;`` itself, so the CR replacement is a no-op
+            # here; what this call still does on this path is assert that the
+            # document is representable in XML 1.0.
             result = _finalize_rdf_xml(_sort_rdf_xml_descriptions(result))
         return _with_single_trailing_newline(result)
 
