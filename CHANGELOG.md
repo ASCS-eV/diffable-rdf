@@ -18,6 +18,12 @@ about it.
   matching `@[A-Za-z]+`. JSON-LD reserves these strings, so returning them in an `@id`
   value can change or discard a graph term.
 
+### Fixed
+
+- **Multiline Turtle literals preserve a terminal quote after any backslash
+  run.** The emitted long-string spelling keeps the literal's exact lexical
+  text and remains parseable for Turtle-family output.
+
 ## [0.3.0] - 2026-09-10
 
 Two kinds of change here, and the difference matters when you upgrade.

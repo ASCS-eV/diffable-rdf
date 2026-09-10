@@ -35,8 +35,10 @@ def _quote_turtle_string(text: str) -> str:
         encoded = text.replace("\\", "\\\\")
         if '"""' in text:
             encoded = encoded.replace('"""', '\\"\\"\\"')
-        if encoded.endswith('"') and not encoded.endswith('\\"'):
-            encoded = encoded[:-1] + '\\"'
+        if encoded.endswith('"'):
+            preceding_backslashes = len(encoded) - 1 - len(encoded[:-1].rstrip("\\"))
+            if preceding_backslashes % 2 == 0:
+                encoded = encoded[:-1] + '\\"'
         return '"""' + encoded.replace("\r", "\\r") + '"""'
     encoded = text.replace("\\", "\\\\").replace('"', '\\"').replace("\r", "\\r")
     return '"' + encoded + '"'
