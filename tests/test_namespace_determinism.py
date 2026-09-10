@@ -9,6 +9,7 @@ import subprocess
 import sys
 import textwrap
 
+import pyoxigraph as ox
 import pytest
 import rdflib
 from rdflib import BNode, Graph, Literal, Namespace, URIRef
@@ -214,18 +215,58 @@ def test_a_query_string_namespace_is_declared_as_a_prefix(namespace: str) -> Non
     assert isomorphic(Graph().parse(data=result, format="turtle"), graph)
 
 
-def test_a_namespace_with_an_embedded_fragment_is_still_skipped() -> None:
-    """The half of the filter that a real pyoxigraph rejection does back.
-
-    Tested at the predicate level rather than end to end: a term *under* such a
-    namespace carries two ``#`` and is not a valid IRI at all, so a graph using
-    one never reaches prefix collection -- it fails pyoxigraph's parse and
-    takes the degraded path. What the filter prevents is handing pyoxigraph a
-    prefix IRI it rejects outright.
-    """
+@pytest.mark.parametrize(
+    ("namespace", "usable"),
+    [
+        pytest.param("http://ex/vocab#", True, id="trailing-fragment"),
+        pytest.param("http://ex/vocab/", True, id="trailing-slash"),
+        pytest.param("http://ex/a?b=c&d=", True, id="query-string"),
+        # An embedded fragment used to be skipped. pyoxigraph accepts it and
+        # its CURIEs round-trip exactly, so skipping it only cost compactness.
+        pytest.param("http://ex/a#b", True, id="embedded-fragment"),
+        pytest.param("http://ex/a#b/", True, id="embedded-fragment-then-slash"),
+        # Not IRIs at all, and each is rejected as a prefix by pyoxigraph.
+        pytest.param("http://ex/a#b#", False, id="two-fragments"),
+        pytest.param("http://ex/%2", False, id="incomplete-percent-escape"),
+        pytest.param("http://ex/a b/", False, id="space"),
+        pytest.param("vocab/", False, id="relative"),
+        pytest.param("not an iri", False, id="not-an-iri"),
+    ],
+)
+def test_the_prefix_filter_matches_what_pyoxigraph_will_accept(namespace: str, usable: bool) -> None:
+    """The filter's job is to predict pyoxigraph's answer, so check it against it."""
     from diffable_rdf.canonicalize import _is_safe_prefix_iri
 
-    assert _is_safe_prefix_iri("http://ex/a#b#") is False
-    assert _is_safe_prefix_iri("http://ex/vocab#") is True
-    assert _is_safe_prefix_iri("http://ex/vocab/") is True
-    assert _is_safe_prefix_iri("http://ex/a?b=c&d=") is True
+    triple = [ox.Triple(ox.NamedNode("http://ex/s"), ox.NamedNode("http://ex/p"), ox.Literal("v"))]
+    try:
+        ox.serialize(triple, format=ox.RdfFormat.TURTLE, prefixes={"n": namespace})
+        accepted = True
+    except (ValueError, SyntaxError):
+        accepted = False
+
+    assert accepted is usable, "the premise of this case no longer holds"
+    assert _is_safe_prefix_iri(namespace) is usable
+
+
+def test_one_undeclarable_binding_no_longer_erases_every_other_prefix() -> None:
+    """The filter being too narrow was not free: it lost the caller's prefixes.
+
+    ``http://ex/%2`` is an incomplete percent-escape, so not an IRI -- but it
+    *is* a prefix of the valid term ``http://ex/%20x``, so it survived the
+    used-prefix filter and reached pyoxigraph, which refused it. The recovery
+    then re-serialized with no prefixes at all, and an unrelated binding the
+    caller did rely on vanished from the document.
+    """
+    good = Namespace("http://good.example/")
+    graph = Graph(bind_namespaces="none")
+    graph.bind("good", good)
+    graph.bind("half", URIRef("http://ex/%2"))
+    graph.add((URIRef("http://ex/%20x"), good.p, Literal("v")))
+    graph.add((good.s, good.p, Literal("v")))
+
+    result = canonicalize_rdf_graph(graph, output_format="turtle")
+
+    assert "@prefix good: <http://good.example/>" in result, result
+    assert "good:s good:p" in result, result
+    assert "half:" not in result, "the undeclarable binding must not be declared"
+    assert isomorphic(Graph().parse(data=result, format="turtle"), graph)

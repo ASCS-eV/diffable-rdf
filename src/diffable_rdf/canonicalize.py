@@ -481,20 +481,42 @@ def _filter_prefixes_to_used(prefixes: dict[str, str], used_iris: set[str]) -> d
 _PN_LOCAL_ESC_UNESCAPE = re.compile(r"\\([_~.\-!$&'()*+,;=/?#@%])")
 
 
-def _turtle_string_spans(text: str) -> list[tuple[int, int]]:
-    """Return half-open spans of the Turtle string literals in ``text``.
+def _turtle_protected_spans(text: str) -> list[tuple[int, int]]:
+    """Return half-open spans of the Turtle tokens a text rewrite must not enter.
 
-    Used to keep text rewrites out of literal content.  Turtle has four string
+    Those are the string literals and the IRIREFs.  Turtle has four string
     forms: single- and triple-quoted, each with either quote character, and a
-    backslash escapes the next character inside all of them.  IRIs need no
-    handling: an IRIREF cannot contain an unescaped quote, so one can never
-    open a span.
+    backslash escapes the next character inside all of them.
+
+    IRIREFs have to be skipped rather than scanned through.  Production [18]
+    excludes ``"`` from an IRIREF but *permits* ``'``, so an IRI as ordinary as
+    ``<http://ex/a'b>`` opened a string span that ran to the end of the
+    document and shifted every span after it: the caller then rewrote inside a
+    literal and produced Turtle that does not parse, which the round-trip
+    guard reported as a serialization defect on valid input.  Inside an IRIREF
+    a backslash appears only in a UCHAR escape and ``>`` is excluded, so the
+    first ``>`` ends the token.
     """
     spans: list[tuple[int, int]] = []
     index = 0
     length = len(text)
     while index < length:
         character = text[index]
+        if character == "<":
+            if text.startswith("<<", index):
+                # An RDF-star quoted-triple delimiter, not an IRIREF.  Step
+                # over it so the IRIREFs inside are recognized individually.
+                index += 2
+                continue
+            end = text.find(">", index + 1)
+            if end == -1:
+                # Unterminated: this is not Turtle.  Stop rather than guess,
+                # so nothing past it is treated as rewritable.
+                spans.append((index, length))
+                break
+            spans.append((index, end + 1))
+            index = end + 1
+            continue
         if character not in ('"', "'"):
             index += 1
             continue
@@ -522,11 +544,12 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
     rewrite each such CURIE to its expanded ``<IRI>`` form so the output
     round-trips through rdflib.
 
-    The rewrite is applied only outside string literals.  A literal whose text
-    happens to look like such a CURIE -- ``"ex:thing\\. "`` -- is ordinary RDF
-    data, and rewriting inside it corrupted the value and produced output that
-    would not parse.  Only the other IRIs in that namespace keep their prefix,
-    so this stays more compact than dropping the prefix binding altogether.
+    The rewrite is applied only outside string literals and IRIREFs.  A literal
+    whose text happens to look like such a CURIE -- ``"ex:thing\\. "`` -- is
+    ordinary RDF data, and rewriting inside it corrupted the value and produced
+    output that would not parse.  Only the other IRIs in that namespace keep
+    their prefix, so this stays more compact than dropping the prefix binding
+    altogether.
     """
     if not prefixes:
         return turtle_text
@@ -553,7 +576,7 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
 
     rewritten: list[str] = []
     cursor = 0
-    for start, end in _turtle_string_spans(turtle_text):
+    for start, end in _turtle_protected_spans(turtle_text):
         rewritten.append(pattern.sub(replace, turtle_text[cursor:start]))
         rewritten.append(turtle_text[start:end])
         cursor = end
@@ -562,25 +585,34 @@ def _expand_trailing_dot_curies(turtle_text: str, prefixes: dict[str, str]) -> s
 
 
 def _is_safe_prefix_iri(iri: str) -> bool:
-    """Check whether a namespace IRI is safe for prefix serialization.
+    """Check whether a namespace IRI can be used as a prefix declaration.
 
-    Only one shape is actually unsafe: an IRI carrying a second ``#``, which
-    pyoxigraph rejects as an invalid prefix IRI ("Invalid prefix … IRI",
-    verified on 0.5.4 and 0.5.11).  Raising over a namespace binding the caller
-    may not even know about would be a poor trade for a prefix declaration, so
-    such a binding is skipped during prefix collection instead; a skipped
-    prefix only means its IRIs are written in full.
+    pyoxigraph requires a prefix IRI to be a valid absolute IRI and rejects
+    anything else with "Invalid prefix … IRI".  rdflib accepts any string as a
+    namespace, so a binding that cannot be declared has to be skipped here; a
+    skipped prefix only means its IRIs are written in full, which is a far
+    better trade than raising over a binding the caller may not even know
+    about.  Asking pyoxigraph is the check -- it owns the rule.
 
-    Query strings are *not* unsafe, despite an earlier claim that rdflib could
-    not round-trip such CURIEs.  That does not reproduce on any supported
-    version: ``@prefix n: <http://ex/?q=>`` with ``n:x``, and the harder
-    ``<http://ex/a?b=c&d=>``, both round-trip exactly on rdflib 6.3.2 and
-    7.6.0 with pyoxigraph 0.5.4 and 0.5.11.
+    Skipping matters more than it looks: the ``Invalid prefix`` recovery at
+    the call site re-serializes with *no* prefixes at all, so one unusable
+    binding used to erase every other prefix from the document.  A binding for
+    ``http://ex/%2`` (an incomplete percent-escape, so not an IRI) alongside a
+    term ``http://ex/%20x`` reaches exactly that: the caller's unrelated
+    prefixes silently disappeared, and the output bytes depended on a binding
+    that contributes nothing.
+
+    Two earlier rules here were wrong in the other direction and cost
+    compactness for nothing.  A ``#`` before the last character is *not*
+    unsafe: ``http://ex/a#b`` and ``http://ex/a#b/`` are both accepted as
+    prefixes and their CURIEs round-trip exactly (rdflib 6.3.2 and 7.6.0,
+    pyoxigraph 0.5.4 and 0.5.11).  Only an IRI carrying a *second* ``#`` is
+    refused, and it is refused by this check because two fragments make it an
+    invalid IRI, not because of where the ``#`` sits.  Query strings are not
+    unsafe either: ``http://ex/?q=`` and ``http://ex/a?b=c&d=`` round-trip
+    exactly on the same versions.
     """
-    # A namespace IRI should end with '/' or '#'.  If '#' appears
-    # *before* the final character, the IRI contains an embedded
-    # fragment which produces unusable CURIEs.
-    return "#" not in iri[:-1]
+    return _is_absolute_iri(iri)
 
 
 def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: str) -> None:
@@ -787,10 +819,9 @@ def canonicalize_rdf_graph(
             # with the @base directive.
             if base_iri and ns_str == base_iri:
                 continue
-            # Skip namespace IRIs that pyoxigraph rejects or that produce
-            # CURIEs rdflib cannot round-trip.  Valid namespace IRIs for
-            # prefix use should end with '/' or '#' and contain no query
-            # parameters or fragment-like characters in the middle.
+            # Skip a namespace pyoxigraph cannot declare as a prefix.  The
+            # recovery below drops *all* prefixes, so letting one unusable
+            # binding through would take the caller's good ones with it.
             if not _is_safe_prefix_iri(ns_str):
                 continue
             prefixes[str(prefix)] = ns_str
