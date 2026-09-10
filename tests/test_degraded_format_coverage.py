@@ -307,3 +307,32 @@ def test_degraded_json_ld_is_untouched_by_the_alias_change() -> None:
 
     assert isinstance(document, list)
     assert "@list" not in result
+
+
+@pytest.mark.parametrize(
+    "iri",
+    [
+        pytest.param("http://ex/%zz", id="bad-percent-escape"),
+        pytest.param("http://ex/a#b#c", id="two-fragments"),
+        pytest.param("http://ex/a[1]", id="brackets-outside-a-host"),
+    ],
+)
+def test_the_refusal_covers_an_iri_that_is_absolute_but_not_valid(iri: str) -> None:
+    """Having a scheme is not the same as being an IRI.
+
+    The check was a regex for a leading ``scheme:``, which each of these
+    passes, so the term was written out and the document that came back could
+    not be parsed at all -- pyoxigraph raised a ``SyntaxError`` on line 1.
+    N-Triples 1.1 §2.2 admits only IRIs, so the guard now asks pyoxigraph,
+    which implements the grammar, instead of sniffing the scheme.
+    """
+    graph = Graph()
+    graph.add((URIRef(iri), EX.p, Literal("v")))
+
+    with pytest.raises(ValueError) as raised:
+        canonicalize_rdf_graph(graph, output_format="nt")
+
+    message = str(raised.value)
+    assert "subject" in message
+    assert "absolute IRI" in message
+    assert iri in message, "the offending term must be named"
