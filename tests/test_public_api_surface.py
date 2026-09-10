@@ -101,3 +101,26 @@ def test_both_dependencies_are_loaded_before_any_public_call_can_be_made() -> No
     )
 
     assert result.stdout.split() == ["True", "True"], result.stdout
+
+
+def test_the_version_has_a_changelog_section() -> None:
+    """A release must not be able to ship without saying what is in it.
+
+    The publish workflow checks the same two things against the release tag,
+    but only at release time. Checking here means a version bump without its
+    changelog entry, or an entry without the bump, fails on the pull request
+    that introduced it.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert f"## [{diffable_rdf.__version__}]" in changelog, (
+        f"CHANGELOG.md has no section for the current version "
+        f"{diffable_rdf.__version__}"
+    )
+    headings = [line for line in changelog.splitlines() if line.startswith("## [")]
+    assert headings[0].startswith(f"## [{diffable_rdf.__version__}]"), (
+        f"the newest changelog section is {headings[0]!r}, not the current version"
+    )

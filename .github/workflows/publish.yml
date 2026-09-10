@@ -17,6 +17,25 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check the release tag matches the package version
+        # Nothing else ties the two together. A release tagged v0.3.0 while
+        # __version__ still said 0.2.0 would publish a 0.2.0 distribution --
+        # rejected by PyPI if that version exists, and silently wrong if it
+        # does not. The changelog is checked too, so a version cannot ship
+        # without the entry describing what changed in it.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(grep -oP '^__version__ = "\K[^"]+' src/diffable_rdf/__init__.py)"
+          echo "tag=$tag package=$version"
+          if [ "$tag" != "$version" ]; then
+            echo "::error::release tag '$GITHUB_REF_NAME' does not match __version__ '$version'" >&2
+            exit 1
+          fi
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section" >&2
+            exit 1
+          fi
+
       - name: Run tests
         run: |
           # --locked checks the committed metadata before the --frozen run.
