@@ -65,6 +65,11 @@ affected artifact, commit it once, and subsequent runs are stable again.
   tie under the sort, so the equal dicts `{1: "a", "1": "b"}` and
   `{"1": "b", 1: "a"}` rendered differently — the one guarantee this function
   makes. Use string keys.
+- **A namespace with an embedded fragment is now used as a prefix.** IRIs under
+  `http://ex/a#b` were written in full because the filter treated any `#`
+  before the last character as unusable. pyoxigraph accepts such a prefix and
+  its CURIEs round-trip exactly, so the output is simply more compact than it
+  was. Only a namespace that is not a valid IRI is skipped now.
 
 ### Added
 
@@ -151,6 +156,21 @@ affected artifact, commit it once, and subsequent runs are stable again.
   was written out and pyoxigraph raised a syntax error on line 1 of the result.
   The check now asks pyoxigraph, which implements the grammar. N-Triples 1.1
   §2.2 admits only IRIs.
+- **An apostrophe in an IRI no longer makes the turtle family refuse the
+  graph.** Turtle's IRIREF production [18] excludes `"` but permits `'`, and an
+  apostrophe is legal in an IRI path (RFC 3987 `sub-delims`) -- but the scanner
+  that keeps text rewrites out of literal content treated it as a string
+  delimiter. `<http://ex/a'b>` opened a span that ran to the end of the
+  document, the trailing-dot CURIE repair then ran inside a literal instead of
+  outside one, and `canonicalize_rdf_graph` reported "canonical turtle
+  serialization does not parse back" for an ordinary graph. IRIREFs are now
+  skipped as tokens, as are RDF-star quoted-triple delimiters.
+- **One undeclarable namespace binding no longer erases every other prefix.**
+  A binding whose namespace is not a valid IRI, such as `http://ex/%2`, could
+  still be a prefix of a valid term, so it reached pyoxigraph, which refused
+  it -- and the recovery re-serializes with no prefixes at all. The caller's
+  unrelated prefixes silently disappeared, and the output bytes depended on a
+  binding that contributed nothing.
 - Two triples differing only in a literal's lexical form are no longer merged
   into one.
 - A graph with a shared `rdf:List` tail no longer loses or duplicates cells on
