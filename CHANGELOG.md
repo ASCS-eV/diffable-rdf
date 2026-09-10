@@ -52,7 +52,10 @@ affected artifact, commit it once, and subsequent runs are stable again.
   serializer orders both its `rdf:Description` elements and the property
   elements inside them by its own graph traversal, so the same graph produced
   different bytes in different processes. Both are sorted now, as the
-  line-oriented formats already sort their lines.
+  line-oriented formats already sort their lines. Descriptions with an IRI
+  subject come before blank-node subjects, and property elements are ordered
+  by predicate -- previously by the *object's* blank-node label where it had
+  one, so a label change anywhere reshuffled unrelated properties.
 - **`nt` and `nquads` now raise for a graph they cannot represent** instead of
   returning text no parser will read. Both accept only absolute IRIs, and a
   graph takes the fallback precisely because it holds a term that is not one.
@@ -171,6 +174,20 @@ affected artifact, commit it once, and subsequent runs are stable again.
   it -- and the recovery re-serializes with no prefixes at all. The caller's
   unrelated prefixes silently disappeared, and the output bytes depended on a
   binding that contributed nothing.
+- **Degraded RDF/XML keeps the prefix names the caller bound.** The
+  determinism pass parsed rdflib's document and re-serialized it through
+  `ElementTree`, which discards a document's prefix mapping on parse and
+  re-derives it on write, so a caller's `beta:` came back as `ns1:`. rdflib had
+  written it correctly; this library replaced it. Elements are now moved as
+  spans of rdflib's own text, so every byte within one -- prefix names,
+  escaping, whitespace -- is the serializer's.
+- **Degraded RDF/XML output no longer depends on process-global state.**
+  `ElementTree` resolves prefixes through a module-global registry, so an
+  unrelated `ElementTree.register_namespace` call anywhere in the process
+  changed the bytes this library produced for the same graph -- against the
+  guarantee the format carries. Nothing is re-serialized now, and the sort key
+  is built from the parsed element rather than from serialized text, so no
+  prefix name enters the ordering either.
 - Two triples differing only in a literal's lexical form are no longer merged
   into one.
 - A graph with a shared `rdf:List` tail no longer loses or duplicates cells on
