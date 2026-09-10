@@ -143,6 +143,14 @@ def test_literals_needing_escapes_still_round_trip() -> None:
             "a\tb",
             'a"""b',
             'a\nb"',
+            # The long-form branch and its `"""` escape: a multi-line literal
+            # is written between triple quotes, so an embedded `"""` has to be
+            # escaped there and a trailing quote would otherwise close the
+            # literal one character early. None of this was covered.
+            'a\nb"""c',
+            'a\nb""""c',
+            'a\nb"""',
+            'a\nb\\"""c',
             "",
             "a" + chr(0x2028) + "b",
             "hi \U0001f389",

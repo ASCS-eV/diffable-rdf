@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Daily, for the newest-versions job: a dependency release that changes
+    # this library's output should be found here rather than by a user.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
 
 jobs:
   test:
@@ -12,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
 
@@ -32,13 +37,10 @@ jobs:
         run: uv run --frozen mypy src/diffable_rdf
 
       - name: Run tests
-        run: uv run --frozen pytest -q --cov=diffable_rdf --cov-report=term-missing
-
-      - name: Build sdist + wheel
-        run: uv build
-
-      - name: Verify metadata
-        run: uv run --with twine python -m twine check dist/*
+        # --cov-fail-under makes the coverage number a gate rather than a
+        # report nobody reads. Set just below the measured figure: it is a
+        # ratchet against new untested code, not a target to chase.
+        run: uv run --frozen pytest -q --cov=diffable_rdf --cov-report=term-missing --cov-fail-under=95
 
   minimum-versions:
     # The `test` job runs `uv run --frozen`, pinning everything to uv.lock, so
@@ -69,3 +71,100 @@ jobs:
 
       - name: Run tests
         run: .venv/bin/python -m pytest -q
+
+  wheel:
+    # The `test` job imports the package from `src/` via pytest's pythonpath,
+    # so nothing there exercises what the wheel actually contains. A missing
+    # module or a missing `py.typed` is invisible until someone installs it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the distributions
+        run: uv build
+
+      - name: Verify the metadata
+        # Moved here from the test matrix, which built and checked the same
+        # distributions once per Python version.
+        run: uv run --with twine python -m twine check dist/*
+
+      - name: Install the built wheel into a clean environment
+        run: |
+          uv venv --clear
+          uv pip install "$(ls dist/*.whl)" "pytest>=8.0"
+
+      - name: Run the suite against the installed wheel
+        # `-o pythonpath=` clears the `src/` entry from pyproject.toml, so the
+        # import resolves to the installed package and not to the working tree.
+        run: |
+          .venv/bin/python -c "import diffable_rdf; print(diffable_rdf.__file__)"
+          .venv/bin/python -m pytest -q -o pythonpath= tests
+
+      - name: Check the wheel ships the typing marker
+        # The package advertises inline types; without py.typed in the wheel a
+        # type checker silently ignores every annotation in it.
+        run: |
+          .venv/bin/python - <<'EOF'
+          import importlib.resources
+          import sys
+
+          marker = importlib.resources.files("diffable_rdf") / "py.typed"
+          if not marker.is_file():
+              sys.exit("py.typed is missing from the built wheel")
+          print("py.typed present")
+          EOF
+
+  newest-versions:
+    # The `test` job pins everything to uv.lock and `minimum-versions` pins the
+    # declared floors, so neither notices a *new* dependency release. This
+    # library's output is coupled to rdflib's and pyoxigraph's behaviour, so a
+    # release that changes it must be found deliberately. Scheduled and manual
+    # only: an upstream release breaking this must not block unrelated PRs.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install the newest permitted versions
+        run: |
+          uv venv --clear
+          uv pip install --upgrade -e . "pytest>=8.0"
+
+      - name: Show what resolved
+        run: uv pip list
+
+      - name: Run tests
+        run: .venv/bin/python -m pytest -q
+
+  other-platforms:
+    # The package claims "Operating System :: OS Independent". One Python
+    # version on each of the other two platforms is enough to keep that claim
+    # evidenced without paying for a full cross product.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Sync (with dev group)
+        run: uv sync --locked --group dev
+
+      - name: Run tests
+        run: uv run --frozen pytest -q
