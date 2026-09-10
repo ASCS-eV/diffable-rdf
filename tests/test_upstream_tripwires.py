@@ -62,9 +62,12 @@ def test_rdflib_jsonld_serializer_still_duplicates_a_shared_list_tail() -> None:
 
     assert not isomorphic(graph, reparsed), (
         f"rdflib {rdflib.__version__} now preserves shared rdf:List tails through its "
-        "JSON-LD serializer. src/diffable_rdf/expanded_jsonld.py exists only to work "
-        "around that defect on the degraded path -- re-evaluate whether it can be "
-        "retired in favour of rdflib's serializer, and delete this tripwire either way. "
+        "JSON-LD serializer (reported as RDFLib/rdflib#3542, fix proposed in #3543). "
+        "src/diffable_rdf/expanded_jsonld.py no longer needs to avoid that defect, so "
+        "re-examine what remains of its rationale -- deterministic key order and the "
+        "refusal of terms the interoperable subset cannot carry are requirements of "
+        "this library, not workarounds, so switching to rdflib's serializer would give "
+        "up both. Delete this tripwire either way. "
         f"(input {len(graph)} triples, round-tripped {len(reparsed)})"
     )
     # Pin the shape of the defect too, so a *different* future breakage does not
@@ -89,9 +92,10 @@ def test_pyoxigraph_rdf_xml_still_writes_a_literal_carriage_return_raw() -> None
     assert "\r" in serialized, (
         f"pyoxigraph {ox.__version__} now escapes a literal carriage return in RDF/XML "
         "instead of writing it raw. The `.replace(chr(13), '&#xD;')` in "
-        "_finalize_rdf_xml (src/diffable_rdf/canonicalize.py) is therefore redundant: "
-        "retire it, keep the XML 1.0 representability check and the round-trip "
-        "verification, and delete this tripwire."
+        "_finalize_rdf_xml (src/diffable_rdf/canonicalize.py) is therefore redundant on "
+        "the pyoxigraph path -- it already is on the degraded path, where rdflib writes "
+        "`&#13;` itself. Retire the replacement, keep the XML 1.0 representability "
+        "check and the round-trip verification, and delete this tripwire."
     )
     # And confirm the consequence, which is what actually matters: an XML parser
     # turns that raw CR into LF, changing the literal.
