@@ -254,3 +254,83 @@ def test_the_error_names_the_argument_and_the_alternatives() -> None:
     assert "iterations" in message
     assert "-3" in message
     assert "None" in message and "0" in message
+
+
+def _tied_quads(names: list[str]) -> list:
+    """One indistinguishable blank node per name, with the names kept as given.
+
+    Not canonicalized: the point is to control the input identifiers, which is
+    what the tie-break reads. Real input carries RDFC-1.0's own ``c14nN``
+    names, which is why those are used here.
+    """
+    quads = []
+    for name in names:
+        node = ox.BlankNode(name)
+        quads.append(
+            ox.Quad(
+                ox.NamedNode("http://ex/root"),
+                ox.NamedNode("http://ex/has"),
+                node,
+                ox.DefaultGraph(),
+            )
+        )
+        quads.append(
+            ox.Quad(node, ox.NamedNode("http://ex/kind"), ox.Literal("same"), ox.DefaultGraph())
+        )
+    return quads
+
+
+def _suffix(label: str) -> int:
+    """The collision counter in a label, 0 for the unsuffixed one."""
+    _, separator, counter = label.partition("_")
+    return int(counter) if separator else 0
+
+
+def test_the_tie_break_follows_the_canonical_numbering() -> None:
+    """The documented order is ``c14nN`` order, and ten nodes is where it broke.
+
+    The counter was assigned in lexicographic order, which puts ``c14n10``
+    between ``c14n1`` and ``c14n2`` -- so the suffixes stopped agreeing with
+    the numbering the docstring promises as soon as a dataset had ten blank
+    nodes.
+    """
+    names = [f"c14n{index}" for index in range(12)]
+
+    labels = wl_blank_node_labels(_tied_quads(names))
+
+    assert [_suffix(labels[name]) for name in names] == list(range(12))
+    assert len(set(labels.values())) == 12, "labels must stay injective"
+
+
+def test_adding_a_blank_node_does_not_relabel_the_tied_ones_before_it() -> None:
+    """Diff stability is the whole point of this module, ties included.
+
+    Adding ``c14n10`` to ten tied nodes used to relabel eight of them: the new
+    identifier sorted third lexicographically and shifted every counter after
+    it. One added node should add one label and move none.
+    """
+    ten = [f"c14n{index}" for index in range(10)]
+
+    before = wl_blank_node_labels(_tied_quads(ten))
+    after = wl_blank_node_labels(_tied_quads([*ten, "c14n10"]))
+
+    assert [name for name in ten if before[name] != after[name]] == []
+    assert set(before.values()) < set(after.values())
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        pytest.param("c14n2", "c14n10", id="numeric-run"),
+        pytest.param("c14n0", "c14n00", id="same-number-two-spellings"),
+        pytest.param("a", "a0", id="text-before-digits"),
+        pytest.param("b9z", "b10a", id="digits-decide-before-later-text"),
+    ],
+)
+def test_the_tie_break_order_is_total_for_any_identifier(left: str, right: str) -> None:
+    """The input identifiers are the caller's; the order must hold for all of them."""
+    from diffable_rdf.wl import _numbering_order_key
+
+    assert _numbering_order_key(left) < _numbering_order_key(right)
+    labels = wl_blank_node_labels(_tied_quads([right, left]))
+    assert _suffix(labels[left]) < _suffix(labels[right])

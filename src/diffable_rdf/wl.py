@@ -28,10 +28,32 @@ References
 from __future__ import annotations
 
 import hashlib
+import re
 
 import pyoxigraph
 
 __all__ = ["wl_blank_node_labels", "wl_relabel_quads"]
+
+
+def _numbering_order_key(identifier: str) -> tuple[tuple[int, int, str], ...]:
+    """Sort blank-node identifiers the way their numbering reads.
+
+    RDFC-1.0 names blank nodes ``c14n0``, ``c14n1``, ... and this module's
+    input is canonical quads, so a plain lexicographic sort puts ``c14n10``
+    between ``c14n1`` and ``c14n2``.  The collision counter is assigned in
+    this order, so from ten blank nodes onwards the suffixes stopped following
+    the canonical numbering -- and inserting one node then shifted the suffix
+    of every tied node after its lexicographic position: adding ``c14n10`` to
+    ten tied nodes relabelled eight of them, for a change that should have
+    added one label and moved none.
+
+    Digit runs compare numerically and the run's own text breaks a tie between
+    two spellings of the same number, so the order is total for any input,
+    including identifiers this module did not choose.
+    """
+    return tuple(
+        (1, int(part), part) if part.isdigit() else (0, 0, part) for part in re.split(r"(\d+)", identifier)
+    )
 
 
 def wl_blank_node_labels(
@@ -104,8 +126,8 @@ def wl_blank_node_labels(
     signatures for the nodes inside them, because a blank-node graph name
     collapses to a constant rather than to its own signature (a blank
     node's identifier must never enter a signature).  Such ties are broken
-    by the collision counter in ``c14nN`` order, exactly as for genuinely
-    indistinguishable nodes.
+    by the collision counter in ``c14nN`` order -- numerically, so ``c14n2``
+    precedes ``c14n10`` -- exactly as for genuinely indistinguishable nodes.
     """
     if iterations is not None and iterations < 0:
         raise ValueError(
@@ -237,9 +259,13 @@ def wl_blank_node_labels(
     else:
         visited: set[str] = set()
         # One seed pass keeps discovery linear even when every node is an
-        # isolated component. Component order cannot affect independent
-        # refinement, and collision suffixes are assigned globally below.
-        for seed in bnode_ids:
+        # isolated component. Components refine independently -- a component's
+        # neighbours are all inside it -- and collision suffixes are assigned
+        # globally below, so component order cannot affect the result. Seeding
+        # in a fixed order rather than in set-iteration order costs nothing
+        # and makes that independent of the process hash seed by construction
+        # instead of by argument.
+        for seed in sorted(bnode_ids, key=_numbering_order_key):
             if seed in visited:
                 continue
             component: set[str] = set()
@@ -256,7 +282,7 @@ def wl_blank_node_labels(
     # Convert signatures to truncated SHA-256 hashes.
     hash_map: dict[str, str] = {}
     seen_hashes: dict[str, int] = {}
-    for bid in sorted(bnode_ids):
+    for bid in sorted(bnode_ids, key=_numbering_order_key):
         digest = hashlib.sha256(sig[bid].encode("utf-8")).hexdigest()[:12]
         # Handle collisions by appending a counter.
         count = seen_hashes.get(digest, 0)

@@ -400,9 +400,11 @@ IRIs and graph names — never from a blank node's own identifier — so it chan
 only when that node's own surroundings do.
 
 Canonicalizing first is what makes the result reproducible: ties between
-structurally indistinguishable nodes are broken in `c14nN` order, so labels
-depend on canonical numbering wherever the structure alone cannot separate two
-nodes.
+structurally indistinguishable nodes are broken in `c14nN` order — numerically,
+so `c14n2` precedes `c14n10` — and labels therefore depend on canonical
+numbering wherever the structure alone cannot separate two nodes. Reading that
+numbering as text instead would put `c14n10` between `c14n1` and `c14n2`, and
+adding one blank node would then shift the suffix of every tied node after it.
 
 **Arguments.**
 
