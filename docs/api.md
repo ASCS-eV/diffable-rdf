@@ -136,7 +136,11 @@ print(turtle)
 <!-- signature -->
 
 ```python
-def canonicalize_rdf_graph(graph: rdflib.Graph, output_format: str = "turtle") -> str
+def canonicalize_rdf_graph(
+    graph: rdflib.Graph,
+    output_format: str = "turtle",
+    diff_stable: bool = False,
+) -> str
 ```
 
 Serializes one graph deterministically in the requested format. Use this when
@@ -150,7 +154,22 @@ not expose a standalone RDFC processor or a selectable hash algorithm.
 This is the lower-level entry point: blank nodes keep their RDFC-1.0 `c14nN`
 labels, which are deterministic but sequential, so inserting a triple can
 renumber the rest. For output kept in version control, prefer
-`deterministic_turtle`, or apply `wl_relabel_quads` in your own pipeline.
+`deterministic_turtle`, or pass `diff_stable=True`.
+
+**`diff_stable=True`** labels blank nodes by Weisfeiler-Leman refinement
+instead, so a label depends on a node's own neighbourhood rather than on the
+whole graph. Editing one part of a graph then leaves the rest of the file
+untouched, which is what makes a version-controlled diff readable. The option
+is opt-in and changes nothing else: output is deterministic either way, and
+both renderings are isomorphic to the input, since RDF 1.1 Concepts §3.4 gives
+blank-node identifiers no meaning beyond a single document. It is the same
+relabelling `wl_relabel_quads` applies, without having to build a pipeline
+around it.
+
+A graph that reaches the rdflib fallback cannot be relabelled — Weisfeiler-Leman
+consumes the pyoxigraph quads that graph could not produce — so the call logs a
+warning and returns rdflib-canonicalized labels, which are deterministic but
+not diff-stable. It never passes silently.
 
 **The two entry points lay Turtle out differently.** Both are correct and both
 preserve every term exactly; only the presentation differs, so the same graph
@@ -265,6 +284,35 @@ canonicalized graph is not — and writing the triples into a *named* graph
 instead would invent a graph name the input never had. N-Quads goes into a
 Dataset's default graph for the same reason, and says exactly what N-Triples
 says.
+
+**`graph.base` is carried on the fallback path too, when it survives.** The
+rule is the same as above — every rendering must verify before it is returned —
+but the reason it has to be checked is different. The fallback writes through
+rdflib, whose `Serializer.relativize` shortens an IRI by string prefix rather
+than by the component algorithm RFC 3986 §5.2.2 defines and Turtle §6.3
+requires. Under a base ending in `#`, in `?`, or mid-path-segment it therefore
+emits a reference that resolves back to a *different* IRI.
+
+RFC 3986 specifies resolution and never its inverse, so a relativization has no
+conformance criterion of its own and no static test can decide it. The
+rendering is instead re-read, and the base is kept only if every **absolute**
+IRI of the source graph is still there. Only loss counts: a *relative* source
+term is outside the RDF abstract syntax (RDF 1.1 Concepts §3.2) and always
+resolves to something on re-reading, so a newly appearing IRI proves nothing. A
+base that is not itself a valid absolute IRI is never declared at all, since
+Turtle §6.5 `IRIREF` admits no space, brace or quote and an invalid directive
+costs more than it saves. Each drop logs a warning naming the base and an IRI
+that forced it.
+
+Keeping it matters because dropping it is not neutral. A document holding
+relative references and declaring no base is not self-describing: RFC 3986
+§5.1.3 hands resolution to the retrieval URI, so the reader's own location
+becomes part of the graph — the same bytes read from two directories yield two
+different graphs. §5.1.4 puts that responsibility on the sender. Where a base
+cannot be kept, absolute terms are preserved in preference to relative ones.
+
+The line-oriented formats are excluded: N-Triples and N-Quads have no base
+directive to declare, and rdflib warns and ignores one.
 
 **The line-oriented formats refuse a graph they cannot represent.** N-Triples
 and N-Quads accept only absolute IRIs — "IRIs may be written only as absolute

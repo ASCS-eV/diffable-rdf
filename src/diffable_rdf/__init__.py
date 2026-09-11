@@ -7,10 +7,11 @@ diffs instead of blank-node churn.
 Public API:
     deterministic_turtle(graph)
         Diff-stable, idiomatic Turtle. The usual entry point.
-    canonicalize_rdf_graph(graph, output_format="turtle")
+    canonicalize_rdf_graph(graph, output_format="turtle", diff_stable=False)
         Deterministic serialization using RDFC-1.0 labels in Turtle, N-Triples, N-Quads,
         RDF/XML, TriG, N3 or JSON-LD. Any other format name is delegated to
-        rdflib with no determinism guarantee.
+        rdflib with no determinism guarantee. Pass diff_stable=True for
+        Weisfeiler-Leman blank-node labels that keep an edit local.
     deterministic_json(obj, indent=3, preserve_list_order_keys=None)
         Deterministically ordered JSON, keeping arrays whose order carries
         JSON-LD meaning.
@@ -43,4 +44,4 @@ __all__ = [
     "__version__",
 ]
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"

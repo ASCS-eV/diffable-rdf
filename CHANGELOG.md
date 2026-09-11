@@ -12,6 +12,51 @@ about it.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-11
+
+**Output bytes change** for graphs that take the rdflib fallback path and carry
+a base IRI. If you serialize only standard RDF, nothing here changes your
+output. Regenerate the affected artifact once and subsequent runs are stable.
+
+### Added
+
+- `canonicalize_rdf_graph` accepts `diff_stable=True`, applying the same
+  Weisfeiler-Leman blank-node labelling as `wl_relabel_quads` so that editing
+  one part of a graph no longer renumbers blank nodes elsewhere. Opt-in;
+  output is deterministic and isomorphic to the input either way. The rdflib
+  fallback path cannot relabel — Weisfeiler-Leman consumes pyoxigraph quads
+  that path never produces — so it logs a warning rather than passing
+  silently.
+
+### Fixed
+
+- The rdflib fallback no longer drops `graph.base` unconditionally. A document
+  holding relative references and declaring no base is not self-describing:
+  RFC 3986 §5.1.3 hands resolution to the retrieval URI, so the same bytes read
+  from two directories produced two different graphs, and §5.1.4 places that
+  responsibility on the sender. The base was dropped because rdflib's
+  `Serializer.relativize` shortens IRIs by string prefix rather than by the
+  component algorithm RFC 3986 §5.2.2 defines and Turtle §6.3 requires, which
+  corrupts terms under a base ending in `#`, in `?`, or mid-path-segment.
+
+  The blanket drop over-corrected: it also discarded safe path-segment and
+  authority-only bases, which are the ones ordinary tooling actually emits.
+  RFC 3986 specifies resolution and never its inverse, so no static test can
+  decide this; the rendering is now re-read and the base kept only if every
+  absolute IRI of the source survives. Only loss counts — a relative source
+  term is outside the RDF abstract syntax (RDF 1.1 Concepts §3.2) and always
+  resolves to something on re-reading. Each drop logs a warning naming the base
+  and an IRI that forced it.
+
+  This was already the documented contract for this path in `docs/api.md`
+  ("every rendering must verify before it is returned"); only the fallback
+  did not honour it.
+
+- A base that is not itself a valid absolute IRI is never declared. rdflib
+  stores whatever base string it is handed, and Turtle §6.5 `IRIREF` admits no
+  space, brace or quote, so such a directive yields a document a strict parser
+  rejects outright.
+
 ## [0.3.0] - 2026-09-11
 
 Two kinds of change here, and the difference matters when you upgrade.
