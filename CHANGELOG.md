@@ -12,51 +12,7 @@ about it.
 
 ## [Unreleased]
 
-### Changed
-
-- **Turtle-family output declares a generated prefix only where the serializer
-  asks for one.** `deterministic_turtle`, and the fallback rendering of
-  `turtle`, `ttl`, `n3` and `trig`, no longer invent a namespace for every IRI
-  in the graph. A namespace you bound is still used in every position. A
-  namespace you did not bind is now declared only for the predicates that use
-  it: subjects, objects and datatypes in an unbound namespace are written as
-  complete IRIs, so `"42"^^ns2:integer` becomes
-  `"42"^^<http://www.w3.org/2001/XMLSchema#integer>` and unused `@prefix` lines
-  disappear. This is a one-time diff on affected artifacts: regenerate, commit
-  once, and later runs are stable again. To keep a namespace compact in every
-  position, bind it — `well_known_prefix_map()` supplies the standard names.
-  RDF/XML, JSON-LD, N-Triples and N-Quads output is byte-identical, as is
-  Turtle whose namespaces are all bound.
-
-- `wl_blank_node_labels` and `wl_relabel_quads` now reject embedded
-  `pyoxigraph.Triple` terms with `ValueError`. They operate on supported
-  top-level quad terms only; direction-tagged literals remain supported.
-- Base rendering is accepted only after RDFLib and pyoxigraph preserve direct
-  and literal-datatype IRI terms. A rendering that does not verify is emitted
-  once more without its base IRI, retaining valid prefixes. If compact prefix
-  rendering still does not verify, a final rendering uses complete IRIs without
-  prefixes or a base. Ordinary valid bindings remain compact. Turtle, TriG,
-  and N3 prefix bindings equal to the base remain available for compact terms;
-  RDF/XML keeps its XML namespace selection on the no-base retry.
-- Degraded JSON-LD rejects a relative subject or object identifier exactly
-  matching `@[A-Za-z]+`. JSON-LD reserves these strings, so returning them in an `@id`
-  value can change or discard a graph term.
-
-### Fixed
-
-- **Valid IRIs that have no prefixed name are serialized instead of refused.**
-  A subject, object or datatype IRI whose namespace split is not itself a valid
-  IRI — `<http://a.example/%25>` splits into `http://a.example/%` plus `25` —
-  made `deterministic_turtle` raise, because the declaration it produced could
-  not be read back. Such IRIs are now written in full. A *predicate* in that
-  shape is still refused: the namespace there is the RDFLib serializer's own
-  choice, and `canonicalize_rdf_graph`, which writes predicates in full,
-  serializes those graphs.
-- **Multiline Turtle literals preserve a terminal quote after any backslash
-  run.** The emitted long-string spelling keeps the literal's exact lexical
-  text and remains parseable for Turtle-family output.
-
-## [0.3.0] - 2026-09-10
+## [0.3.0] - 2026-09-11
 
 Two kinds of change here, and the difference matters when you upgrade.
 
@@ -82,6 +38,32 @@ the affected artifact, commit it once, and subsequent runs are stable again.
 
 ### Changed
 
+- **Turtle-family output declares a generated prefix only where the serializer
+  asks for one.** `deterministic_turtle`, and the fallback rendering of
+  `turtle`, `ttl`, `n3` and `trig`, no longer invent a namespace for every IRI
+  in the graph. A namespace you bound is still used in every position. A
+  namespace you did not bind is now declared only for the predicates that use
+  it: subjects, objects and datatypes in an unbound namespace are written as
+  complete IRIs, so `"42"^^ns2:integer` becomes
+  `"42"^^<http://www.w3.org/2001/XMLSchema#integer>` and unused `@prefix` lines
+  disappear. This is a one-time diff on affected artifacts: regenerate, commit
+  once, and later runs are stable again. To keep a namespace compact in every
+  position, bind it — `well_known_prefix_map()` supplies the standard names.
+  RDF/XML, JSON-LD, N-Triples and N-Quads output is byte-identical, as is
+  Turtle whose namespaces are all bound.
+- `wl_blank_node_labels` and `wl_relabel_quads` now reject embedded
+  `pyoxigraph.Triple` terms with `ValueError`. They operate on supported
+  top-level quad terms only; direction-tagged literals remain supported.
+- Base rendering is accepted only after RDFLib and pyoxigraph preserve direct
+  and literal-datatype IRI terms. A rendering that does not verify is emitted
+  once more without its base IRI, retaining valid prefixes. If compact prefix
+  rendering still does not verify, a final rendering uses complete IRIs without
+  prefixes or a base. Ordinary valid bindings remain compact. Turtle, TriG,
+  and N3 prefix bindings equal to the base remain available for compact terms;
+  RDF/XML keeps its XML namespace selection on the no-base retry.
+- Degraded JSON-LD rejects a relative subject or object identifier exactly
+  matching `@[A-Za-z]+`. JSON-LD reserves these strings, so returning them in an `@id`
+  value can change or discard a graph term.
 - **Typed literals in `deterministic_turtle` keep their exact lexical form.**
   An `xsd:integer` is now written `"42"^^xsd:integer` rather than `42`, and
   likewise for booleans and other typed values. Turtle's numeric short form
@@ -192,6 +174,17 @@ the affected artifact, commit it once, and subsequent runs are stable again.
 
 ### Fixed
 
+- **Valid IRIs that have no prefixed name are serialized instead of refused.**
+  A subject, object or datatype IRI whose namespace split is not itself a valid
+  IRI — `<http://a.example/%25>` splits into `http://a.example/%` plus `25` —
+  made `deterministic_turtle` raise, because the declaration it produced could
+  not be read back. Such IRIs are now written in full. A *predicate* in that
+  shape is still refused: the namespace there is the RDFLib serializer's own
+  choice, and `canonicalize_rdf_graph`, which writes predicates in full,
+  serializes those graphs.
+- **Multiline Turtle literals preserve a terminal quote after any backslash
+  run.** The emitted long-string spelling keeps the literal's exact lexical
+  text and remains parseable for Turtle-family output.
 - **A graph whose `base` contains a fragment no longer serializes to something
   rdflib reads back differently.** `canonicalize_rdf_graph` relativized
   `http://ex.org/d#a` to `<#a>` under base `http://ex.org/d#`, which is correct
