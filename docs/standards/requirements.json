@@ -1,0 +1,2504 @@
+{
+  "schema_version": 1,
+  "features": [
+    {
+      "id": "deterministic_turtle",
+      "kind": "callable",
+      "description": "Diff-stable Turtle graph rendering",
+      "export": "deterministic_turtle"
+    },
+    {
+      "id": "canonicalize_rdf_graph",
+      "kind": "callable",
+      "description": "Single-graph serialization with backend canonical labels",
+      "export": "canonicalize_rdf_graph"
+    },
+    {
+      "id": "deterministic_json",
+      "kind": "callable",
+      "description": "Deterministic JSON ordering with bounded JSON-LD ordering awareness",
+      "export": "deterministic_json"
+    },
+    {
+      "id": "well_known_prefix_map",
+      "kind": "callable",
+      "description": "Independent namespace-to-prefix mappings",
+      "export": "well_known_prefix_map"
+    },
+    {
+      "id": "wl_blank_node_labels",
+      "kind": "callable",
+      "description": "Structural labels for canonicalized quads",
+      "export": "wl_blank_node_labels"
+    },
+    {
+      "id": "wl_relabel_quads",
+      "kind": "callable",
+      "description": "Relabelled copies of canonicalized quads",
+      "export": "wl_relabel_quads"
+    },
+    {
+      "id": "format.turtle",
+      "kind": "format",
+      "description": "Turtle graph output",
+      "aliases": [
+        "turtle",
+        "ttl"
+      ],
+      "backend": "Turtle"
+    },
+    {
+      "id": "format.nt",
+      "kind": "format",
+      "description": "N-Triples graph output",
+      "aliases": [
+        "nt",
+        "ntriples",
+        "n-triples",
+        "nt11"
+      ],
+      "backend": "N-Triples"
+    },
+    {
+      "id": "format.nquads",
+      "kind": "format",
+      "description": "N-Quads graph output",
+      "aliases": [
+        "nquads",
+        "n-quads"
+      ],
+      "backend": "N-Quads"
+    },
+    {
+      "id": "format.xml",
+      "kind": "format",
+      "description": "RDF/XML graph output",
+      "aliases": [
+        "xml",
+        "rdf/xml"
+      ],
+      "backend": "RDF/XML"
+    },
+    {
+      "id": "format.trig",
+      "kind": "format",
+      "description": "TriG graph output",
+      "aliases": [
+        "trig"
+      ],
+      "backend": "TriG"
+    },
+    {
+      "id": "format.n3",
+      "kind": "format",
+      "description": "N3 graph output",
+      "aliases": [
+        "n3"
+      ],
+      "backend": "N3"
+    },
+    {
+      "id": "format.jsonld",
+      "kind": "format",
+      "description": "JSON-LD graph output",
+      "aliases": [
+        "json-ld",
+        "jsonld",
+        "application/ld+json"
+      ],
+      "backend": "JSON-LD"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "API-SURFACE",
+      "description": "Six public functions have the documented exports and resolvable runtime annotations.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "deterministic_json",
+        "well_known_prefix_map",
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:well_known_prefix_map",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/contracts/test_public_api_surface.py::test_the_documented_surface_is_what_the_module_exports",
+          "tests/contracts/test_public_api_surface.py::test_every_public_annotation_resolves_at_runtime"
+        ],
+        "boundary": [
+          "tests/contracts/test_public_api_surface.py::test_the_turtle_entry_point_names_the_graph_type_it_takes",
+          "tests/contracts/test_public_api_surface.py::test_the_preserved_keys_argument_admits_any_set"
+        ],
+        "subprocess": [
+          "tests/contracts/test_public_api_surface.py::test_both_dependencies_are_loaded_before_any_public_call_can_be_made"
+        ]
+      },
+      "not_applicable": {
+        "negative": "Export enumeration and annotation inspection take no caller data to reject.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "API-EXAMPLES",
+      "description": "Eight executable documentation examples run against the selected package; six signature blocks parse as single function definitions.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "deterministic_json",
+        "well_known_prefix_map",
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:well_known_prefix_map",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "end-to-end": [
+          "tests/integration/test_documentation_examples.py::test_documented_example_runs_from_a_neutral_directory"
+        ],
+        "positive": [
+          "tests/integration/test_documentation_examples.py::test_documentation_classifies_every_python_block",
+          "tests/integration/test_documentation_examples.py::test_documented_signature_parses"
+        ],
+        "negative": [
+          "tests/integration/test_documentation_examples.py::test_broken_documentation_example_fails_in_the_selected_interpreter"
+        ],
+        "boundary": [
+          "tests/integration/test_documentation_examples.py::test_extractor_rejects_missing_and_invalid_markers"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately."
+      }
+    },
+    {
+      "id": "GRAPH-ADMISSION",
+      "description": "Graph serializers admit individual graph contexts and reject Dataset and ConjunctiveGraph containers before dispatch.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.1 Triples",
+          "anchor": "section-triples",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.graph_input:_require_single_graph",
+          "path": "src/diffable_rdf/graph_input.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/contracts/test_graph_input.py::test_individual_dataset_graph_context_is_accepted_losslessly",
+          "tests/contracts/test_graph_input.py::test_ordinary_graph_with_context_aware_store_is_accepted"
+        ],
+        "negative": [
+          "tests/contracts/test_graph_input.py::test_dataset_containers_are_rejected_without_mutation",
+          "tests/contracts/test_graph_input.py::test_canonicalize_rejects_datasets_before_every_format_dispatch"
+        ],
+        "boundary": [
+          "tests/contracts/test_graph_input.py::test_canonicalize_rejects_dataset_before_inspecting_format"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "GRAPH-IMMUTABILITY",
+      "description": "Serialization retains caller triples, base, bindings and global literal settings in the checked native and degraded cases.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_literal_fidelity.py::test_serialization_does_not_mutate_input_or_global_normalization",
+          "tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position"
+        ],
+        "boundary": [
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_is_stable_and_does_not_mutate_input_or_global_settings",
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_aliases_are_deterministic_and_leave_input_unchanged"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "FORMAT-DETERMINISM",
+      "description": "Every guaranteed alias has byte-identical output across hash-seeded processes on a shared-list graph.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.nt",
+        "format.nquads",
+        "format.xml",
+        "format.trig",
+        "format.n3",
+        "format.jsonld"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "RDFC10",
+          "section": "3.1 Terms defined by this specification",
+          "anchor": "canon-terms",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "subprocess": [
+          "tests/contracts/test_format_guarantee.py::test_every_mapped_format_is_byte_identical_across_processes"
+        ],
+        "positive": [
+          "tests/contracts/test_format_guarantee.py::test_canonicalize_rdf_graph_is_deterministic_across_processes"
+        ]
+      },
+      "not_applicable": {
+        "negative": "Format admission and delegated-name boundaries are mapped separately in FORMAT-DELEGATION.",
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "FORMAT-ALIASES",
+      "description": "Aliases select the same backend syntax; representative mixed-case names and degraded synonyms preserve their contract.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.nt",
+        "format.nquads",
+        "format.xml",
+        "format.trig",
+        "format.n3",
+        "format.jsonld"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/contracts/test_format_guarantee.py::test_mapped_formats_cover_every_name_the_docstring_promises",
+          "tests/contracts/test_format_guarantee.py::test_canonicalize_rdf_graph_accepts_mixed_case_format_names",
+          "tests/serialization/test_degraded_format_coverage.py::test_synonyms_for_one_format_produce_identical_bytes"
+        ],
+        "negative": [
+          "tests/serialization/test_degraded_format_coverage.py::test_synonyms_refuse_for_the_same_reason"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_aliases_are_deterministic_and_leave_input_unchanged",
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_aliases_use_exact_round_trip_guard"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "FORMAT-DELEGATION",
+      "description": "Unmapped plugins are explicitly outside the determinism guarantee; unknown plugins and empty delegated output fail visibly.",
+      "features": [
+        "canonicalize_rdf_graph"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.canonicalize:_deterministic_fallback_serialize",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/contracts/test_format_guarantee.py::test_delegating_to_an_rdflib_plugin_warns_that_the_guarantee_does_not_apply",
+          "tests/contracts/test_format_guarantee.py::test_a_delegated_format_still_gets_canonical_blank_node_labels"
+        ],
+        "negative": [
+          "tests/contracts/test_format_guarantee.py::test_an_unregistered_format_name_still_surfaces_rdflibs_own_error",
+          "tests/serialization/test_fallback_integrity.py::test_a_delegated_format_that_writes_nothing_is_refused_not_returned"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_format_coverage.py::test_an_unregistered_name_still_reaches_rdflib_on_the_degraded_path"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "FORMAT-FRAMING",
+      "description": "Nonempty mapped RDF output has exactly one trailing newline on normal and carrying degraded paths.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.nt",
+        "format.nquads",
+        "format.xml",
+        "format.trig",
+        "format.n3",
+        "format.jsonld"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:_with_single_trailing_newline",
+          "path": "src/diffable_rdf/canonicalize.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/contracts/test_trailing_newline.py::test_every_mapped_format_ends_with_exactly_one_newline",
+          "tests/contracts/test_trailing_newline.py::test_deterministic_turtle_ends_with_exactly_one_newline"
+        ],
+        "boundary": [
+          "tests/contracts/test_trailing_newline.py::test_the_degraded_path_ends_with_exactly_one_newline",
+          "tests/contracts/test_trailing_newline.py::test_deterministic_turtle_ends_with_exactly_one_newline_when_degraded",
+          "tests/contracts/test_trailing_newline.py::test_normalising_the_newline_does_not_add_a_blank_line"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "FORMAT-EMPTY",
+      "description": "Empty Turtle and N-Triples stay empty; empty JSON-LD is a newline-terminated empty array.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.nt",
+        "format.jsonld"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "boundary": [
+          "tests/contracts/test_trailing_newline.py::test_an_empty_graph_stays_an_empty_document"
+        ],
+        "positive": [
+          "tests/contracts/test_trailing_newline.py::test_an_empty_graph_stays_an_empty_document"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "GRAPH-DEFAULT",
+      "description": "Single-graph N-Quads has no graph label; degraded TriG carries explicit default-graph list triples.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.nquads",
+        "format.trig"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "NQUADS11",
+          "section": "2.1 Simple Statements",
+          "anchor": "simple-triples",
+          "normative": true
+        },
+        {
+          "reference": "TRIG11",
+          "section": "5.3.1 Output Graph",
+          "anchor": "output-graph",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_degraded_format_coverage.py::test_line_oriented_output_still_works_when_the_graph_is_representable",
+          "tests/serialization/test_degraded_format_coverage.py::test_degraded_trig_states_list_structure_explicitly"
+        ],
+        "negative": [
+          "tests/contracts/test_graph_input.py::test_canonicalize_rejects_datasets_before_every_format_dispatch"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_format_coverage.py::test_degraded_output_preserves_the_graph"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "RDF-ISOMORPHISM",
+      "description": "Seeded Turtle graph shapes preserve RDF graph identity after serialization and parsing.",
+      "features": [
+        "deterministic_turtle"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.6 Graph Comparison",
+          "anchor": "section-graph-equality",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "property": [
+          "tests/properties/test_canonicalization_properties.py::test_p1_canonical_output_is_lossless"
+        ],
+        "positive": [
+          "tests/properties/test_canonicalization_properties.py::test_p1_canonical_output_is_lossless"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "TURTLE-STABILITY",
+      "description": "Seeded Turtle output is idempotent and independent of insertion order and source blank-node names.",
+      "features": [
+        "deterministic_turtle"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "property": [
+          "tests/properties/test_canonicalization_properties.py::test_p2_canonicalization_is_idempotent",
+          "tests/properties/test_canonicalization_properties.py::test_p3_output_does_not_depend_on_blank_node_labels",
+          "tests/properties/test_canonicalization_properties.py::test_p4_output_does_not_depend_on_insertion_order"
+        ],
+        "positive": [
+          "tests/properties/test_canonicalization_properties.py::test_p2_canonicalization_is_idempotent"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "RDF-LEXICAL",
+      "description": "Checked integer, boolean, dateTime, decimal, signed-zero and non-finite literal spellings retain lexical term identity.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.trig",
+        "format.n3"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.3 Literals",
+          "anchor": "section-Graph-Literal",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_literal_fidelity.py::test_deterministic_turtle_preserves_distinct_lexical_forms",
+          "tests/serialization/test_literal_fidelity.py::test_lower_level_turtle_family_preserves_literal_identity"
+        ],
+        "boundary": [
+          "tests/serialization/test_literal_fidelity.py::test_deterministic_turtle_preserves_full_double_precision",
+          "tests/serialization/test_literal_fidelity.py::test_deterministic_turtle_preserves_other_typed_lexical_forms",
+          "tests/serialization/test_numeric_literal_edges.py::test_the_lexical_form_the_graph_holds_is_what_is_written"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "RDF-LANGUAGE",
+      "description": "Plain strings and xsd:string render equivalently; normal-path language tags use the permitted lowercase spelling.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.3 Literals",
+          "anchor": "section-Graph-Literal",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_literal_fidelity.py::test_intentional_string_and_language_equivalences_remain_canonical",
+          "tests/integration/test_diffable_rdf.py::test_canonicalize_rdf_graph_normalizes_language_tag_case"
+        ],
+        "boundary": [
+          "tests/serialization/test_base_iri_fidelity.py::test_the_guard_accepts_plain_string_and_xsd_string_datatype_equivalence",
+          "tests/serialization/test_base_iri_fidelity.py::test_the_guard_keeps_a_direct_xsd_string_iri_significant"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "RDF-IRI-BASE",
+      "description": "Fragment, path, query and equal-base namespaces preserve direct and datatype IRIs in the checked verified renderings.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.trig",
+        "format.n3",
+        "format.xml"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "TURTLE11",
+          "section": "6.3 IRI References",
+          "anchor": "sec-iri-references",
+          "normative": true
+        },
+        {
+          "reference": "RFC3986",
+          "section": "5.2 Relative Resolution",
+          "anchor": null,
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        },
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_base_iri_fidelity.py::test_a_fragment_base_preserves_the_terms",
+          "tests/serialization/test_base_iri_fidelity.py::test_an_equal_base_namespace_preserves_every_iri_position"
+        ],
+        "boundary": [
+          "tests/serialization/test_base_iri_fidelity.py::test_deterministic_turtle_preserves_hash_path_and_slash_bases",
+          "tests/serialization/test_base_iri_fidelity.py::test_an_unprefixed_query_base_retries_without_base_and_preserves_datatypes",
+          "tests/serialization/test_base_iri_fidelity.py::test_a_datatype_only_query_base_retries_without_base",
+          "tests/serialization/test_base_iri_fidelity.py::test_rdf_xml_retries_without_base_for_typed_literal_namespaces"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "RDF-DATATYPE-GUARD",
+      "description": "Round-trip boundary checks distinguish missing or invented datatype IRIs from xsd:string literal equivalence.",
+      "features": [
+        "canonicalize_rdf_graph"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.3 Literals",
+          "anchor": "section-Graph-Literal",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.canonicalize:_assert_round_trips",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_base_iri_fidelity.py::test_the_guard_accepts_plain_string_and_xsd_string_datatype_equivalence"
+        ],
+        "negative": [
+          "tests/serialization/test_base_iri_fidelity.py::test_the_guard_catches_missing_and_invented_literal_datatypes",
+          "tests/serialization/test_base_iri_fidelity.py::test_the_guard_catches_an_iri_the_input_never_contained",
+          "tests/serialization/test_base_iri_fidelity.py::test_the_guard_keeps_a_direct_xsd_string_iri_significant"
+        ],
+        "boundary": [
+          "tests/serialization/test_base_iri_fidelity.py::test_the_guard_tolerates_rdflibs_literal_normalization"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "TURTLE-QUOTING",
+      "description": "Quoted literals preserve terminal quote/backslash runs, LF, CR and CRLF in checked native and relative-subject outputs.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.trig",
+        "format.n3"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "TURTLE11",
+          "section": "6.4 Escape Sequences",
+          "anchor": "sec-escapes",
+          "normative": true
+        },
+        {
+          "reference": "TURTLE11",
+          "section": "6.5 Grammar",
+          "anchor": "sec-grammar-grammar",
+          "normative": true
+        },
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.3 Literals",
+          "anchor": "section-Graph-Literal",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_numeric_literal_edges.py::test_literals_needing_escapes_still_round_trip"
+        ],
+        "boundary": [
+          "tests/serialization/test_literal_fidelity.py::test_deterministic_turtle_preserves_literal_quote_boundaries",
+          "tests/serialization/test_literal_fidelity.py::test_turtle_aliases_preserve_literal_quote_boundaries",
+          "tests/serialization/test_literal_fidelity.py::test_deterministic_turtle_fallback_preserves_literal_quote_boundaries",
+          "tests/serialization/test_literal_fidelity.py::test_turtle_alias_fallbacks_preserve_literal_quote_boundaries"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "TURTLE-NAMES",
+      "description": "Punctuation, Unicode-prefix and overlapping-prefix examples preserve subject, predicate, object and datatype IRIs.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.trig",
+        "format.n3"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "TURTLE11",
+          "section": "6.5 Grammar",
+          "anchor": "sec-grammar-grammar",
+          "normative": true
+        },
+        {
+          "reference": "RFC3987",
+          "section": "2.2 ABNF for IRI References and IRIs",
+          "anchor": null,
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        },
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position",
+          "tests/serialization/test_prefixed_names.py::test_overlapping_prefixes_and_aliases_remain_optional"
+        ],
+        "boundary": [
+          "tests/serialization/test_prefixed_names.py::test_curie_looking_literal_content_is_data",
+          "tests/serialization/test_prefixed_names.py::test_deterministic_turtle_preserves_curie_looking_literal_content"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "TURTLE-COLLECTIONS",
+      "description": "Private, shared-head and shared-tail list examples retain cell identity; the degraded path uses explicit list triples.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph",
+        "format.turtle",
+        "format.trig",
+        "format.n3"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.6 Graph Comparison",
+          "anchor": "section-graph-equality",
+          "normative": true
+        },
+        {
+          "reference": "TURTLE11",
+          "section": "2.8 Collections",
+          "anchor": "collections",
+          "normative": false
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        },
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/properties/test_canonicalization_properties.py::test_shared_list_structures_survive_canonicalization"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_collections.py::test_degraded_turtle_is_lossless_for_shared_list_tails",
+          "tests/serialization/test_degraded_collections.py::test_degraded_n3_is_lossless_for_shared_list_tails",
+          "tests/serialization/test_degraded_format_coverage.py::test_degraded_trig_states_list_structure_explicitly"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "TURTLE-PRESENTATION",
+      "description": "Diff-stable Turtle uses quoted typed literals and inline blank nodes where the graph shape permits.",
+      "features": [
+        "deterministic_turtle"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "TURTLE11",
+          "section": "6.5 Grammar",
+          "anchor": "sec-grammar-grammar",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_literal_fidelity.py::test_typed_literals_are_written_in_quoted_form",
+          "tests/integration/test_diffable_rdf.py::test_deterministic_turtle_uses_inline_blank_nodes"
+        ],
+        "boundary": [
+          "tests/serialization/test_numeric_literal_edges.py::test_the_object_order_is_total_for_value_tied_and_mixed_terms"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "NAMESPACES-ISOLATION",
+      "description": "Namespace selection preserves caller bindings, reserves generated names and remains stable across processes in checked graph shapes.",
+      "features": [
+        "deterministic_turtle",
+        "canonicalize_rdf_graph"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.namespaces:prepare_namespaces",
+          "path": "src/diffable_rdf/namespaces.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_namespace_determinism.py::test_caller_prefixes_are_preserved_and_generated_names_are_reserved"
+        ],
+        "negative": [
+          "tests/serialization/test_namespace_determinism.py::test_an_undeclarable_binding_preserves_usable_prefixes"
+        ],
+        "boundary": [
+          "tests/serialization/test_namespace_determinism.py::test_deterministic_turtle_degraded_path_keeps_graph_and_bindings",
+          "tests/serialization/test_namespace_determinism.py::test_the_prefix_filter_matches_what_pyoxigraph_will_accept"
+        ],
+        "subprocess": [
+          "tests/serialization/test_namespace_determinism.py::test_namespace_allocation_is_stable_across_processes"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "SERIALIZER-VERIFICATION",
+      "description": "Verified renderings remove base then prefixes only after failed fidelity checks; final validation and unrelated backend errors propagate.",
+      "features": [
+        "canonicalize_rdf_graph"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_base_iri_fidelity.py::test_a_verified_base_does_not_serialize_twice",
+          "tests/serialization/test_prefixed_names.py::test_a_valid_compact_spelling_keeps_a_problematic_binding"
+        ],
+        "negative": [
+          "tests/serialization/test_prefixed_names.py::test_final_prefix_attempt_propagates_validation_failure",
+          "tests/serialization/test_base_iri_fidelity.py::test_an_unrelated_backend_error_is_not_retried",
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_guard_rejects_corrupted_serializer_output"
+        ],
+        "boundary": [
+          "tests/serialization/test_prefixed_names.py::test_verification_failures_remove_options_in_order",
+          "tests/serialization/test_prefixed_names.py::test_retry_options_do_not_affect_later_renderings"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "LINE-TERMS",
+      "description": "Line syntaxes refuse relative or malformed IRIs and name the offending term position rather than emit invalid N-Triples or N-Quads.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.nt",
+        "format.nquads"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "NTRIPLES11",
+          "section": "2.2 IRIs",
+          "anchor": "sec-iri",
+          "normative": true
+        },
+        {
+          "reference": "NTRIPLES11",
+          "section": "7 Grammar",
+          "anchor": "n-triples-grammar",
+          "normative": true
+        },
+        {
+          "reference": "NQUADS11",
+          "section": "4 Grammar",
+          "anchor": "sec-grammar",
+          "normative": true
+        },
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.1 Triples",
+          "anchor": "section-triples",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.canonicalize:_first_term_n_triples_cannot_write",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_degraded_format_coverage.py::test_line_oriented_output_still_works_when_the_graph_is_representable"
+        ],
+        "negative": [
+          "tests/serialization/test_degraded_format_coverage.py::test_line_oriented_aliases_refuse_a_graph_they_cannot_represent",
+          "tests/serialization/test_degraded_format_coverage.py::test_the_refusal_covers_an_iri_that_is_absolute_but_not_valid"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_format_coverage.py::test_the_refusal_names_the_position_of_the_offending_term"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "LINE-SEPARATORS",
+      "description": "The internal line sorter preserves Unicode separators inside literals and sorts complete statement lines.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.nt",
+        "format.nquads"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "NTRIPLES11",
+          "section": "7 Grammar",
+          "anchor": "n-triples-grammar",
+          "normative": true
+        },
+        {
+          "reference": "NQUADS11",
+          "section": "4 Grammar",
+          "anchor": "sec-grammar",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:_deterministic_fallback_serialize",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_fallback_integrity.py::test_the_line_sort_still_sorts"
+        ],
+        "boundary": [
+          "tests/serialization/test_fallback_integrity.py::test_the_line_sort_preserves_a_literal_carrying_a_unicode_break"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This internal branch is tested directly; unrepresentable public line-format inputs are refused before it."
+      }
+    },
+    {
+      "id": "XML-LITERALS",
+      "description": "Checked RDF/XML literals retain CR, CRLF, tabs, Unicode, markup escapes, datatypes and language identity after parsing.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.xml"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "XML10",
+          "section": "2.11 End-of-Line Handling",
+          "anchor": "sec-line-ends",
+          "normative": true
+        },
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.3 Literals",
+          "anchor": "section-Graph-Literal",
+          "normative": true
+        },
+        {
+          "reference": "RDFXML11",
+          "section": "7 RDF/XML Grammar",
+          "anchor": "section-Infoset-Grammar",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.canonicalize:_finalize_rdf_xml",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_preserves_diverse_literal_content_and_identity"
+        ],
+        "boundary": [
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_preserves_known_lossy_literal_values",
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_aliases_work_on_degraded_fallback",
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_a_literal_carriage_return_still_survives_the_sort"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "XML-CHARACTERS",
+      "description": "RDF/XML rejects XML 1.0-forbidden characters in literal content and serializer metadata.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.xml"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "XML10",
+          "section": "2.2 Characters",
+          "anchor": "charsets",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.canonicalize:_assert_xml_10_representable",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_preserves_diverse_literal_content_and_identity"
+        ],
+        "negative": [
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_rejects_characters_forbidden_by_xml_10"
+        ],
+        "boundary": [
+          "tests/serialization/test_xml_fidelity.py::test_rdf_xml_rejects_forbidden_characters_in_serializer_metadata"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "XML-NAMESPACE",
+      "description": "Checked RDF/XML namespace declarations survive sorting; an inexpressible generalized literal predicate surfaces its backend QName error.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.xml"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "XMLNS10",
+          "section": "4 Qualified Names",
+          "anchor": "ns-qualnames",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_the_callers_prefix_names_survive_the_sort",
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_the_document_stays_well_formed_and_declared"
+        ],
+        "negative": [
+          "tests/serialization/test_fallback_integrity.py::test_a_fallback_serializer_error_names_the_format_and_a_way_forward"
+        ]
+      },
+      "not_applicable": {
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "XML-ORDERING",
+      "description": "Degraded RDF/XML orders descriptions and property elements without altering graph meaning or caller prefixes.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.xml"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.canonicalize:_sort_rdf_xml_descriptions",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_sorting_preserves_the_graph",
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_property_elements_within_a_subject_are_ordered_too",
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_properties_are_ordered_by_predicate_not_by_their_objects_label"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_the_output_does_not_depend_on_process_global_xml_state"
+        ],
+        "subprocess": [
+          "tests/serialization/test_degraded_rdfxml_determinism.py::test_degraded_rdf_xml_is_byte_identical_across_processes"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSONLD-GRAPH",
+      "description": "The normal expanded JSON-LD backend preserves shared RDF list cells instead of compacting them into duplicate lists.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.jsonld"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "JSONLD11",
+          "section": "9.2 Node Objects",
+          "anchor": "node-objects",
+          "normative": true
+        },
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.6 Graph Comparison",
+          "anchor": "section-graph-equality",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_degraded_collections.py::test_json_ld_is_lossless_for_shared_list_tails"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_jsonld.py::test_normal_json_ld_path_still_uses_pyoxigraph"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSONLD-FALLBACK",
+      "description": "Expanded degraded JSON-LD retains shared cells, references, cycles and literal annotation strings.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.jsonld"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "JSONLD11",
+          "section": "9.2 Node Objects",
+          "anchor": "node-objects",
+          "normative": true
+        },
+        {
+          "reference": "JSONLD11",
+          "section": "9.5 Value Objects",
+          "anchor": "value-objects",
+          "normative": true
+        },
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.6 Graph Comparison",
+          "anchor": "section-graph-equality",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.expanded_jsonld:serialize_expanded_jsonld",
+          "path": "src/diffable_rdf/expanded_jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_preserves_shared_cells_references_and_cycles",
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_preserves_literal_lexical_strings_and_annotations"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_preserves_nonkeyword_identifiers_with_an_explicit_base"
+        ],
+        "subprocess": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_is_reproducible_across_processes"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSONLD-TERM-BOUNDARY",
+      "description": "The degraded JSON-LD subset refuses generalized term positions, relative predicate/datatype IRIs and URIRef values resembling blank-node identifiers.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.jsonld"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.1 Triples",
+          "anchor": "section-triples",
+          "normative": true
+        },
+        {
+          "reference": "JSONLD11",
+          "section": "9.2 Node Objects",
+          "anchor": "node-objects",
+          "normative": true
+        },
+        {
+          "reference": "JSONLD11",
+          "section": "9.5 Value Objects",
+          "anchor": "value-objects",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.expanded_jsonld:serialize_expanded_jsonld",
+          "path": "src/diffable_rdf/expanded_jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_preserves_literal_lexical_strings_and_annotations"
+        ],
+        "negative": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_rejects_terms_outside_interoperable_subset",
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_rejects_literal_predicates"
+        ]
+      },
+      "not_applicable": {
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSONLD-RESERVED",
+      "description": "The degraded writer refuses keyword-shaped relative identifiers, while keyword-shaped literal text and non-keyword identifier spellings survive.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.jsonld"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "JSONLD11-API",
+          "section": "5.2 IRI Expansion",
+          "anchor": "iri-expansion",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.expanded_jsonld:_iri_identifier",
+          "path": "src/diffable_rdf/expanded_jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "negative": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_rejects_reserved_relative_identifiers"
+        ],
+        "positive": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_preserves_keyword_shaped_literal_text"
+        ],
+        "boundary": [
+          "tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_preserves_nonkeyword_identifiers_with_an_explicit_base"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSON-ORDERING",
+      "description": "Object keys and application-unordered arrays sort deterministically without mutation; this changes ordinary JSON array order by project policy.",
+      "features": [
+        "deterministic_json"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "RFC8259",
+          "section": "4 Objects",
+          "anchor": null,
+          "normative": true
+        },
+        {
+          "reference": "RFC8259",
+          "section": "5 Arrays",
+          "anchor": null,
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/integration/test_diffable_rdf.py::test_deterministic_json_sorts_keys_and_lists",
+          "tests/json/test_jsonld_order.py::test_context_free_json_still_sorts_lists_and_does_not_mutate_input"
+        ],
+        "property": [
+          "tests/json/test_json_mixed_keys.py::test_parsed_json_rendering_is_idempotent",
+          "tests/integration/test_diffable_rdf.py::test_deterministic_json_is_stable_regardless_of_insertion_order"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSON-MIXEDKEYS",
+      "description": "Mixed Python keys sort by their encoded names, and duplicate encoded names are refused before JSON object information can be lost.",
+      "features": [
+        "deterministic_json"
+      ],
+      "category": "extension",
+      "clauses": [
+        {
+          "reference": "RFC8259",
+          "section": "4 Objects",
+          "anchor": null,
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:_json_key",
+          "path": "src/diffable_rdf/jsonld.py"
+        },
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.jsonld:_sorted_items",
+          "path": "src/diffable_rdf/jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/json/test_json_mixed_keys.py::test_mixed_key_dictionary_list_permutations_are_deterministic"
+        ],
+        "negative": [
+          "tests/json/test_json_mixed_keys.py::test_encoded_key_collisions_are_refused_not_emitted_twice",
+          "tests/json/test_json_mixed_keys.py::test_two_distinct_nan_keys_are_refused_as_well"
+        ],
+        "boundary": [
+          "tests/json/test_json_mixed_keys.py::test_non_string_keys_sort_by_the_name_json_writes_not_by_str"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSON-LISTS",
+      "description": "Explicit and locally declared lists retain order, including nested lists, while graph/set arrays may be reordered without changing the checked RDF meaning.",
+      "features": [
+        "deterministic_json"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "JSONLD11",
+          "section": "9.7 Lists and Sets",
+          "anchor": "lists-and-sets",
+          "normative": true
+        },
+        {
+          "reference": "JSONLD11",
+          "section": "4.3 Value Ordering",
+          "anchor": "sets-and-lists",
+          "normative": false
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/json/test_jsonld_order.py::test_context_defined_list_preserves_rdf_meaning",
+          "tests/json/test_jsonld_order.py::test_explicit_list_preserves_rdf_meaning",
+          "tests/json/test_jsonld_unordered_keys.py::test_sorting_an_unordered_container_does_not_change_the_rdf"
+        ],
+        "boundary": [
+          "tests/json/test_jsonld_order.py::test_an_array_nested_in_an_ordered_array_keeps_its_order",
+          "tests/json/test_jsonld_unordered_keys.py::test_a_container_list_term_nested_in_a_set_array_keeps_its_order",
+          "tests/json/test_jsonld_unordered_keys.py::test_an_aliased_list_nested_in_a_graph_array_keeps_its_order",
+          "tests/json/test_jsonld_order.py::test_a_dict_inside_an_ordered_array_still_starts_a_sortable_node_object"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSON-CONTEXTS",
+      "description": "Local ordering facts respect sequential context overrides, inheritance, null resets and checked forward alias definitions without claiming a full context processor.",
+      "features": [
+        "deterministic_json"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "JSONLD11-API",
+          "section": "4.1 Context Processing Algorithm",
+          "anchor": "context-processing-algorithm",
+          "normative": true
+        },
+        {
+          "reference": "JSONLD11-API",
+          "section": "4.2 Create Term Definition",
+          "anchor": "create-term-definition",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:_apply_local_context",
+          "path": "src/diffable_rdf/jsonld.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:_apply_term_definitions",
+          "path": "src/diffable_rdf/jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/json/test_jsonld_order.py::test_context_overrides_are_applied_in_order",
+          "tests/json/test_jsonld_order.py::test_local_context_is_inherited_and_null_resets_it",
+          "tests/json/test_jsonld_order.py::test_list_keyword_alias_preserves_rdf_meaning"
+        ],
+        "boundary": [
+          "tests/json/test_jsonld_order.py::test_a_term_definition_may_reference_an_alias_declared_after_it",
+          "tests/json/test_jsonld_order.py::test_a_shadowing_definition_in_a_nested_context_array_keeps_its_order",
+          "tests/json/test_jsonld_unordered_keys.py::test_a_context_inside_a_graph_element_is_still_applied"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSON-LITERALS",
+      "description": "Explicit and locally recognized JSON literal payload arrays retain their sequence and checked RDF meaning.",
+      "features": [
+        "deterministic_json"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "JSONLD11",
+          "section": "9.5 Value Objects",
+          "anchor": "value-objects",
+          "normative": true
+        },
+        {
+          "reference": "RFC8259",
+          "section": "5 Arrays",
+          "anchor": null,
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/json/test_jsonld_order.py::test_json_literal_arrays_preserve_rdf_meaning"
+        ],
+        "boundary": [
+          "tests/json/test_jsonld_order.py::test_a_term_definition_may_reference_an_alias_declared_after_it[type-json-through-an-alias-declared-later]"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSON-UNKNOWN",
+      "description": "Unknown remote, scoped and unsupported local contexts conservatively preserve descendant arrays and never fetch remote contexts.",
+      "features": [
+        "deterministic_json"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:_apply_local_context",
+          "path": "src/diffable_rdf/jsonld.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/json/test_jsonld_order.py::test_scoped_context_fails_safe_for_the_document",
+          "tests/json/test_jsonld_order.py::test_type_scoped_context_fails_safe_and_preserves_rdf_meaning"
+        ],
+        "negative": [
+          "tests/json/test_jsonld_order.py::test_remote_context_is_never_loaded_and_fails_safe"
+        ],
+        "boundary": [
+          "tests/json/test_jsonld_order.py::test_unsupported_context_directive_fails_safe"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "JSON-OVERRIDES",
+      "description": "Custom preserved-key sets replace convenience defaults without disabling keyword-based list protection.",
+      "features": [
+        "deterministic_json"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "JSONLD11",
+          "section": "9.7 Lists and Sets",
+          "anchor": "lists-and-sets",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/json/test_jsonld_unordered_keys.py::test_a_custom_key_set_replaces_the_default_but_not_the_keyword_rules",
+          "tests/contracts/test_public_api_surface.py::test_the_preserved_keys_argument_admits_any_set"
+        ],
+        "boundary": [
+          "tests/json/test_jsonld_unordered_keys.py::test_imports_stays_protected_by_default_and_is_droppable",
+          "tests/json/test_json_mixed_keys.py::test_custom_preserved_list_keeps_mixed_key_element_order"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WL-IDENTITY",
+      "description": "WL relabelling returns a fresh isomorphic quad list, preserves blank-node cardinality and leaves input quads untouched.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.6 Graph Comparison",
+          "anchor": "section-graph-equality",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_contracts.py::test_wl_relabel_quads_preserves_the_graph"
+        ],
+        "boundary": [
+          "tests/wl/test_wl_contracts.py::test_wl_functions_leave_supported_input_quads_unchanged"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WL-COMPONENTS",
+      "description": "Unrelated additions, edits and removals do not advance a disconnected component's default refinement.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads",
+        "deterministic_turtle"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_components.py::test_default_convergence_isolated_from_disconnected_changes",
+          "tests/wl/test_wl_components.py::test_public_turtle_preserves_a_visible_disconnected_label",
+          "tests/wl/test_wl_contracts.py::test_wl_relabel_quads_is_diff_stable"
+        ],
+        "property": [
+          "tests/wl/test_wl_components.py::test_component_labels_ignore_input_order_and_blank_node_names"
+        ],
+        "boundary": [
+          "tests/wl/test_wl_components.py::test_shared_blank_subject_object_roles_form_one_component",
+          "tests/wl/test_wl_components.py::test_graph_membership_does_not_join_signature_independent_components"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WL-TIES",
+      "description": "Structurally tied nodes remain injective and collision suffixes follow numeric canonical numbering.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_contracts.py::test_wl_blank_node_labels_are_injective",
+          "tests/wl/test_wl_components.py::test_tied_components_remain_injective"
+        ],
+        "boundary": [
+          "tests/wl/test_wl_components.py::test_the_tie_break_follows_the_canonical_numbering",
+          "tests/wl/test_wl_components.py::test_adding_a_blank_node_does_not_relabel_the_tied_ones_before_it"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WL-GRAPHS",
+      "description": "Named graphs influence labels; blank graph-name identifiers remain consistent when also used as object terms.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_contracts.py::test_wl_distinguishes_identical_structure_in_different_named_graphs",
+          "tests/wl/test_wl_contracts.py::test_wl_relabel_quads_remaps_blank_node_graph_names"
+        ],
+        "boundary": [
+          "tests/wl/test_wl_contracts.py::test_wl_labels_graph_name_only_blank_nodes_by_content",
+          "tests/wl/test_wl_contracts.py::test_wl_labels_are_stable_for_default_graph_input"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WL-ITERATIONS",
+      "description": "Default refinement reaches component fixpoints, explicit rounds remain synchronous, zero is valid and negative counts are refused.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_contracts.py::test_wl_refines_to_a_fixpoint_by_default",
+          "tests/wl/test_wl_components.py::test_explicit_iterations_still_run_the_requested_global_round_count"
+        ],
+        "negative": [
+          "tests/wl/test_wl_components.py::test_a_negative_iteration_count_is_rejected",
+          "tests/wl/test_wl_components.py::test_the_error_names_the_argument_and_the_alternatives"
+        ],
+        "boundary": [
+          "tests/wl/test_wl_components.py::test_zero_iterations_is_accepted_and_means_no_refinement"
+        ]
+      },
+      "not_applicable": {
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WL-BOUNDARY",
+      "description": "Embedded triple objects are rejected consistently at zero, explicit and default refinement rounds.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [
+        {
+          "reference": "RDF11-CONCEPTS",
+          "section": "3.1 Triples",
+          "anchor": "section-triples",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "boundary",
+          "target": "diffable_rdf.wl:_validate_quad_terms",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_contracts.py::test_wl_functions_leave_supported_input_quads_unchanged"
+        ],
+        "negative": [
+          "tests/wl/test_wl_contracts.py::test_wl_functions_reject_embedded_triple_objects"
+        ]
+      },
+      "not_applicable": {
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WL-DIRECTION",
+      "description": "Dependency-supported directional literals remain distinct and retain language and direction fields during WL relabelling.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "extension",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_contracts.py::test_wl_keeps_direction_tagged_literals_complete_and_distinct"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This row covers dependency-constructible directional literals, not a directional-literal parser.",
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WORK-TIME",
+      "description": "A representative 8400-triple OWL-shaped graph serializes within the tested process time budget.",
+      "features": [
+        "deterministic_turtle"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.turtle:deterministic_turtle",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "subprocess": [
+          "tests/performance/test_canonicalization_budget.py::test_owl_shaped_graph_canonicalizes_within_a_time_budget"
+        ],
+        "positive": [
+          "tests/performance/test_canonicalization_budget.py::test_owl_shaped_graph_canonicalizes_within_a_time_budget"
+        ]
+      },
+      "not_applicable": {
+        "negative": "A representative workload bound is not an API promise to reject all resource-intensive graphs.",
+        "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "WORK-MEMORY",
+      "description": "A representative sixteen-round WL workload fits the tested address-space budget where the platform supports limits.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "subprocess": [
+          "tests/performance/test_wl_memory_budget.py::test_wl_signatures_stay_bounded_under_many_iterations"
+        ],
+        "positive": [
+          "tests/performance/test_wl_memory_budget.py::test_wl_signatures_stay_bounded_under_many_iterations"
+        ]
+      },
+      "not_applicable": {
+        "negative": "The process resource limit is a test oracle, not a library input-rejection API.",
+        "boundary": "Platforms unable to set the address-space limit explicitly skip this measurement in pytest.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "PREFIX-MAP",
+      "description": "Prefix maps invert the selected RDFLib nonempty bindings into independent string dictionaries.",
+      "features": [
+        "well_known_prefix_map"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.turtle:well_known_prefix_map",
+          "path": "src/diffable_rdf/turtle.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/contracts/test_prefix_map.py::test_prefix_map_inverts_current_nonempty_bindings",
+          "tests/integration/test_diffable_rdf.py::test_well_known_prefix_map_contains_schema_org"
+        ],
+        "boundary": [
+          "tests/contracts/test_prefix_map.py::test_prefix_map_calls_return_independent_snapshots"
+        ]
+      },
+      "not_applicable": {
+        "negative": "The no-argument snapshot function has no invalid input domain.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+      }
+    },
+    {
+      "id": "PROFILE-RDFC-PROCESSOR",
+      "description": "Standalone RDFC processor conformance, canonical N-Quads bytes and hash selection are outside the wrapper API.",
+      "features": [
+        "canonicalize_rdf_graph"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "RDFC10",
+          "section": "2 Conformance",
+          "anchor": "conformance",
+          "normative": true
+        },
+        {
+          "reference": "RDFC10",
+          "section": "A A Canonical form of N-Quads",
+          "anchor": "canonical-quads",
+          "normative": true
+        },
+        {
+          "reference": "RDFC10",
+          "section": "3.1 Terms defined by this specification",
+          "anchor": "canon-terms",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "out-of-profile",
+      "reason": "The wrapper supplies one graph to the dependency and reserializes it; it has no selectable hash algorithm or canonical-byte-output contract.",
+      "evidence": {},
+      "not_applicable": {}
+    },
+    {
+      "id": "PROFILE-RDFC-LIMITS",
+      "description": "Configurable RDFC resource-limit reporting is not exposed by the graph serializer API.",
+      "features": [
+        "canonicalize_rdf_graph"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "RDFC10",
+          "section": "2 Conformance",
+          "anchor": "conformance",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "out-of-profile",
+      "reason": "Representative workload tests do not expose or establish a standalone processor resource-limit interface.",
+      "evidence": {},
+      "not_applicable": {}
+    },
+    {
+      "id": "PROFILE-JSONLD-PROCESSOR",
+      "description": "Full JSON-LD expansion, compaction, remote loading and processing-algorithm conformance are outside the ordering helper.",
+      "features": [
+        "deterministic_json",
+        "canonicalize_rdf_graph"
+      ],
+      "category": "normative",
+      "clauses": [
+        {
+          "reference": "JSONLD11-API",
+          "section": "3 Conformance",
+          "anchor": "conformance",
+          "normative": true
+        }
+      ],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.jsonld:deterministic_json",
+          "path": "src/diffable_rdf/jsonld.py"
+        },
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "out-of-profile",
+      "reason": "The public functions order a JSON tree or serialize an RDF graph; neither is a general JSON-LD processor.",
+      "evidence": {},
+      "not_applicable": {}
+    },
+    {
+      "id": "PROFILE-N3-LOGIC",
+      "description": "Notation3 formulas, implications and variable-based logic are outside the supported N3 graph subset.",
+      "features": [
+        "canonicalize_rdf_graph",
+        "format.n3"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "dependency",
+          "target": "diffable_rdf.canonicalize:canonicalize_rdf_graph",
+          "path": "src/diffable_rdf/canonicalize.py"
+        }
+      ],
+      "status": "out-of-profile",
+      "reason": "The N3 alias accepts the same single RDF graph as the other serializers and does not provide a logic input model.",
+      "evidence": {},
+      "not_applicable": {}
+    },
+    {
+      "id": "PROFILE-RDF12",
+      "description": "Complete RDF 1.2 or embedded-triple conformance is outside the accepted WL term extension.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "extension",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "out-of-profile",
+      "reason": "Dependency-supported literal direction is retained, but embedded triples are rejected and no complete RDF 1.2 profile is claimed.",
+      "evidence": {},
+      "not_applicable": {}
+    }
+  ]
+}

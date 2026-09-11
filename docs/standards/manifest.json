@@ -87,7 +87,33 @@
         "W3C-DOCUMENT-RESOLVED"
       ],
       "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
-      "anchors": []
+      "anchors": [
+        {
+          "id": "sec-grammar",
+          "section": "6 Turtle Grammar",
+          "normative": true
+        },
+        {
+          "id": "sec-iri-references",
+          "section": "6.3 IRI References",
+          "normative": true
+        },
+        {
+          "id": "sec-escapes",
+          "section": "6.4 Escape Sequences",
+          "normative": true
+        },
+        {
+          "id": "sec-grammar-grammar",
+          "section": "6.5 Grammar",
+          "normative": true
+        },
+        {
+          "id": "collections",
+          "section": "2.8 Collections",
+          "normative": false
+        }
+      ]
     },
     {
       "id": "TRIG11",
@@ -106,7 +132,13 @@
         "W3C-DOCUMENT-RESOLVED"
       ],
       "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
-      "anchors": []
+      "anchors": [
+        {
+          "id": "output-graph",
+          "section": "5.3.1 Output Graph",
+          "normative": true
+        }
+      ]
     },
     {
       "id": "NTRIPLES11",
@@ -125,7 +157,18 @@
         "W3C-DOCUMENT-RESOLVED"
       ],
       "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
-      "anchors": []
+      "anchors": [
+        {
+          "id": "sec-iri",
+          "section": "2.2 IRIs",
+          "normative": true
+        },
+        {
+          "id": "n-triples-grammar",
+          "section": "7 Grammar",
+          "normative": true
+        }
+      ]
     },
     {
       "id": "NQUADS11",
@@ -144,7 +187,18 @@
         "W3C-DOCUMENT-RESOLVED"
       ],
       "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
-      "anchors": []
+      "anchors": [
+        {
+          "id": "simple-triples",
+          "section": "2.1 Simple Statements",
+          "normative": true
+        },
+        {
+          "id": "sec-grammar",
+          "section": "4 Grammar",
+          "normative": true
+        }
+      ]
     },
     {
       "id": "RDFXML11",
@@ -163,7 +217,13 @@
         "W3C-DOCUMENT-RESOLVED"
       ],
       "notice": "Original copyright, publication status and linked document-use or permissive document license notice are retained in the unmodified HTML.",
-      "anchors": []
+      "anchors": [
+        {
+          "id": "section-Infoset-Grammar",
+          "section": "7 RDF/XML Grammar",
+          "normative": true
+        }
+      ]
     },
     {
       "id": "JSONLD11",
@@ -195,6 +255,16 @@
         {
           "id": "conformance",
           "section": "2 Conformance",
+          "normative": true
+        },
+        {
+          "id": "node-objects",
+          "section": "9.2 Node Objects",
+          "normative": true
+        },
+        {
+          "id": "value-objects",
+          "section": "9.5 Value Objects",
           "normative": true
         }
       ]
@@ -229,6 +299,11 @@
         {
           "id": "conformance",
           "section": "3 Conformance",
+          "normative": true
+        },
+        {
+          "id": "iri-expansion",
+          "section": "5.2 IRI Expansion",
           "normative": true
         }
       ]

@@ -7,7 +7,7 @@ coupling independent concerns.
 | Group | Responsibility | Primary dimensions |
 | --- | --- | --- |
 | `harness/` | Test-target selection and child-process isolation | source and wheel provenance, interpreter configuration |
-| `standards/` | Pinned reference integrity and standards evidence | document identities, source provenance, licenses, digests, clause anchors |
+| `standards/` | Pinned reference integrity and requirement evidence | provenance, licenses, digests, clauses, feature inventory, collected test selectors |
 | `contracts/` | Public API, accepted graph inputs, format names, and output framing | exports, annotations, input coercion, format guarantees |
 | `serialization/` | RDF document fidelity and serializer fallbacks | bases, namespaces, literals, XML, list identity, process determinism |
 | `properties/` | Seeded graph invariants | losslessness, idempotence, label independence, insertion-order independence |
@@ -79,3 +79,28 @@ python scripts/check_standards.py
 The same reference checks run in `standards/` under both source and installed
 targets. They establish the integrity of the reference evidence, not complete
 implementation of every clause of each copied specification.
+
+The [requirement map](../docs/standards/coverage.md) connects scoped behaviors to
+their pinned clauses or project policies, implementation owners and focused
+test functions. Each row identifies applicable positive, negative, boundary,
+property, subprocess and end-to-end evidence, and explains dimensions not
+separately claimed. Tests stay organized by their generic behavior groups;
+standards identifiers belong in the central catalog rather than test names.
+
+```bash
+python scripts/check_requirements.py
+python -m pytest -q --package-under-test=source tests/standards
+```
+
+This check uses one lazy full collect-only subprocess per standards test
+session. It does not execute tests recursively or expand an ordinary focused
+test selection. Actual selected-package exports, format aliases, implementation
+entry points and pytest nodeids are compared with the catalog. Removed or renamed
+evidence, incorrect normative fragments and stale generated tables fail.
+
+`python scripts/check_requirements.py --render` explicitly regenerates the
+readable table after a reviewed catalog change. The normal check is read-only
+and offline. Match counts describe collection, not pass results; full source
+and installed-wheel runs remain required, including their explicit platform
+and source-only skip reporting. See the
+[catalog schema and maintenance rules](../docs/standards/README.md#requirement-catalog-schema).
