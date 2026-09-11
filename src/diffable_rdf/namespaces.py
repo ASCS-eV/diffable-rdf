@@ -5,8 +5,8 @@ from __future__ import annotations
 from rdflib import Graph, Literal, URIRef
 
 
-def prepare_namespaces(target: Graph, source: Graph) -> None:
-    """Bind source prefixes and allocate missing prefixes in a stable order.
+def bind_source_namespaces(target: Graph, source: Graph) -> None:
+    """Install the source graph's bindings, reserving their names.
 
     ``target`` must use a namespace manager created with
     ``bind_namespaces="none"``. Caller bindings are installed first so their
@@ -29,6 +29,23 @@ def prepare_namespaces(target: Graph, source: Graph) -> None:
         preferred = source.namespace_manager.store.prefix(URIRef(namespace))
         if preferred is not None:
             target.namespace_manager.bind(str(preferred), URIRef(namespace), override=True, replace=True)
+
+
+def prepare_namespaces(target: Graph, source: Graph) -> None:
+    """Bind source prefixes and allocate a prefix for every IRI in the graph.
+
+    For serializers that discover namespaces while traversing the graph in
+    store order: allocating in lexical IRI order first makes the generated
+    ``nsN`` names a function of the graph instead of its insertion order.
+
+    A serializer that decides for itself which term positions may carry a
+    generated prefix must use :func:`bind_source_namespaces` instead. Splitting
+    every term unconditionally invents namespaces such a format would never
+    declare, and the split of a valid IRI is not itself always a valid
+    namespace IRI: ``http://a.example/%25`` splits into ``http://a.example/%``
+    and ``25``, and that namespace cannot be written in any RDF syntax.
+    """
+    bind_source_namespaces(target, source)
 
     iris: set[str] = set()
     for subject, predicate, object_ in target:

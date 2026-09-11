@@ -47,7 +47,17 @@ canonical `c14nN` blank-node labels with Weisfeiler-Lehman structural hashes
 (`b<12 hex digits>`), which depend only on predicate IRIs, literal values and
 named-node IRIs; re-serialization through rdflib's Turtle writer, which
 recovers inline blank nodes `[ … ]`, collection syntax `( … )` and prefix
-declarations limited to the namespaces the graph uses.
+declarations.
+
+Which namespaces get a declaration is the writer's decision, taken per term
+position. A namespace the caller bound is used wherever it occurs. A namespace
+the caller did not bind is declared only for the predicates it spells, and
+gets a generated `ns1`, `ns2`, … name; subjects, objects and datatypes in such
+a namespace are written as complete IRIs. A prefixed name is optional syntax
+that not every IRI has — `<http://a.example/%25>` splits into a namespace no
+RDF syntax can declare — so the writer only asks for one where it is safe.
+Bind the namespaces you want compact everywhere;
+[`well_known_prefix_map`](#well_known_prefix_map) supplies the standard names.
 
 The rendered text is re-parsed and compared with the input using sorted RDF
 term strings after pyoxigraph's RDFC-1.0 labeling. This internal comparison
@@ -70,7 +80,8 @@ RFC 3986 correct for a hash base: under base `http://ex.org/d#`, the IRI
 **Arguments.** `graph` — a single `rdflib.Graph`.
 
 **Returns.** `str`, Turtle with `@prefix` declarations. Typed literals are
-written in quoted form (`"42"^^xsd:integer`), which
+written in quoted form — `"42"^^xsd:integer` with `xsd` bound,
+`"42"^^<http://www.w3.org/2001/XMLSchema#integer>` without it — which
 [`canonicalize_rdf_graph`](#canonicalize_rdf_graph) does not do — see the
 comparison there.
 
@@ -144,7 +155,7 @@ renumber the rest. For output kept in version control, prefer
 **The two entry points lay Turtle out differently.** Both are correct and both
 preserve every term exactly; only the presentation differs, so the same graph
 through each parses to the same RDF. For the graph
-`ex:s ex:count 42 ; ex:flag true`:
+`ex:s ex:count 42 ; ex:flag true` with `ex` and `xsd` bound:
 
 | | `deterministic_turtle` | `canonicalize_rdf_graph` |
 |---|---|---|
@@ -152,6 +163,7 @@ through each parses to the same RDF. For the graph
 | Indentation | four spaces | one tab |
 | Prefix order | as bound, then generated | as pyoxigraph emits them |
 | After the prefixes | one blank line | none |
+| Unbound namespaces | generated names for predicates, complete IRIs elsewhere | complete IRIs |
 
 The literal spelling is the difference that matters. `deterministic_turtle`
 renders every typed literal in quoted form, because Turtle's numeric and
@@ -588,10 +600,13 @@ the temporary sibling is removed.
 Identical bytes across two runs assume the same inputs to the whole pipeline:
 
 - **The same prefix bindings.** When a compact rendering verifies, caller
-  prefix names take precedence and remaining `ns1`, `ns2`, … names are
-  allocated in IRI order, independent of insertion order and hash seed. A
-  binding can instead render as complete IRIs when compact output does not
-  verify. Bind a namespace differently and the output can change accordingly.
+  prefix names take precedence. Generated `ns1`, `ns2`, … names go to the
+  predicate namespaces of Turtle-family output, numbered in lexical predicate
+  order; the rdflib fallback for the other formats numbers every namespace it
+  allocates in lexical IRI order. Both are independent of insertion order and
+  hash seed. A binding can instead render as complete IRIs when compact output
+  does not verify. Bind a namespace differently and the output can change
+  accordingly.
 - **The same `graph.base`.** `deterministic_turtle` ignores it;
   `canonicalize_rdf_graph` uses it when the base rendering verifies and can
   otherwise emit complete IRIs without it.

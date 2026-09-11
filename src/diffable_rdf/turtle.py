@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # already run RDFC-1.0 themselves can reuse it without this serializer.
 from diffable_rdf.wl import wl_blank_node_labels as _wl_signatures  # noqa: E402
 from diffable_rdf.graph_input import _require_single_graph  # noqa: E402
-from diffable_rdf.namespaces import prepare_namespaces  # noqa: E402
+from diffable_rdf.namespaces import bind_source_namespaces  # noqa: E402
 
 
 def _quote_turtle_string(text: str) -> str:
@@ -61,7 +61,7 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
         construction and cannot raise.
         """
         for objects in properties.values():
-            objects.sort(key=self._object_sort_key)
+            objects.sort(key=self._term_sort_key)
 
         ordered: list = []
         seen = set()
@@ -76,8 +76,8 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
         return ordered
 
     @staticmethod
-    def _object_sort_key(node: Node) -> tuple:
-        """A total order over objects that never consults the value space."""
+    def _term_sort_key(node: Node) -> tuple:
+        """A total order over RDF terms that never consults the value space."""
         # Rank blank nodes, IRIs, and literals in that order. Complete term
         # spelling provides a total order within each kind.
         if isinstance(node, BNode):
@@ -87,6 +87,34 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
         if isinstance(node, Literal):
             return (2, str(node), node.language or "", str(node.datatype or ""))
         return (3, str(node), "", "")
+
+    def _triple_sort_key(self, triple) -> tuple:
+        """Order triples by predicate first, then subject, then object."""
+        subject, predicate, object_ = triple
+        return (
+            self._term_sort_key(predicate),
+            self._term_sort_key(subject),
+            self._term_sort_key(object_),
+        )
+
+    def preprocess(self) -> None:
+        """Visit every triple once, in an order the graph alone decides.
+
+        The inherited pass generates a prefix for a predicate namespace as it
+        first meets one, so the ``nsN`` names are numbered in traversal order.
+        rdflib traverses its store in insertion order, which would let the same
+        graph, built in a different order, spell the same statements with
+        different names. Ordering by the complete term spelling instead --
+        predicate first, since that is the position the inherited pass
+        generates a prefix for -- makes the numbering a function of the graph.
+
+        The reference counts this collects decide blank-node and collection
+        layout, so every triple is presented exactly once per serialization. A
+        graph that needs the collection-free rendering gets a second serializer
+        instance, not a second pass over this one.
+        """
+        for triple in sorted(self.store, key=self._triple_sort_key):
+            self.preprocessTriple(triple)
 
     def label(self, node: Node, position: int) -> str:
         from rdflib import Literal
@@ -113,8 +141,9 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
             return quoted
         # gen_prefix=False: this runs in the write phase, after the @prefix
         # block has been emitted, so a prefix invented here would be used and
-        # never declared. prepare_namespaces has already bound every datatype
-        # namespace the graph uses.
+        # never declared. A datatype namespace the caller did not bind keeps
+        # its complete IRI, which is also what the inherited serializer does:
+        # it generates no prefix for a datatype in any position.
         get_pname = getattr(self, "get_pname", None) or self.getQName
         pname = get_pname(node.datatype, False)
         return f"{quoted}^^{pname or f'<{node.datatype}>'}"
@@ -324,7 +353,9 @@ def deterministic_turtle(graph: Graph) -> str:
             )
         )
 
-    prepare_namespaces(result_graph, graph)
+    # Bindings only: which namespaces earn a generated prefix is the Turtle
+    # serializer's decision, taken per term position in its preprocessing pass.
+    bind_source_namespaces(result_graph, graph)
 
     # rdflib's Turtle serializer always emits a trailing double newline;
     # normalize to a single newline for consistent file endings.

@@ -127,15 +127,21 @@ def test_caller_prefixes_are_preserved_and_generated_names_are_reserved() -> Non
 
     result = deterministic_turtle(graph)
 
+    # Generated names are for predicates, numbered in lexical predicate order
+    # after the caller's own ``ns1`` is reserved. A namespace that only a
+    # subject, object or datatype uses gets no invented prefix: those terms
+    # keep their complete IRI unless the caller bound the namespace, as with
+    # ``dt`` here, because a prefixed name is optional syntax the serializer
+    # chooses per position (Turtle 1.1 section 6.5).
     assert _prefixes(result) == {
         "": "http://default.example/",
         "dt": "http://types.example/vocab/",
         "ns2": "http://alpha.example/vocab/",
         "ns3": "http://middle.example/vocab/",
-        "ns4": "http://objects.example/",
-        "ns5": "http://punct.example/vocab/",
+        "ns4": "http://punct.example/vocab/",
         "vocab": "http://zeta.example/vocab/",
     }
+    assert "<http://objects.example/value>" in result
     assert "<http://trailing.example/vocab/value.>" in result
     assert "reserved.example" not in result
     assert "unused.example" not in result

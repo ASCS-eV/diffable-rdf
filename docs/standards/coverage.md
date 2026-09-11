@@ -3,7 +3,7 @@
 Generated from [requirements.json](requirements.json) by `python scripts/check_requirements.py --render`.
 The default command checks this table without modifying it.
 
-49 supported requirements; 5 explicit profile exclusions; 813 distinct collected tests; 942 requirement-to-test links.
+49 supported requirements; 5 explicit profile exclusions; 874 distinct collected tests; 1003 requirement-to-test links.
 
 Counts describe collected evidence, not executed or passing tests. One test can support several rows.
 This is not a percentage of all clauses in the copied specifications or a complete Cartesian test matrix.
@@ -35,7 +35,7 @@ harness skips are reported by pytest when executing the suite, not hidden by col
 | [API-SURFACE](#api-surface) | policy / supported | Six public functions have the documented exports and resolvable runtime annotations. | 10 |
 | [API-EXAMPLES](#api-examples) | policy / supported | Eight executable documentation examples run against the selected package; six signature blocks parse as single function definitions. | 30 |
 | [GRAPH-ADMISSION](#graph-admission) | policy / supported | Graph serializers admit individual graph contexts and reject Dataset and ConjunctiveGraph containers before dispatch. | 59 |
-| [GRAPH-IMMUTABILITY](#graph-immutability) | policy / supported | Serialization retains caller triples, base, bindings and global literal settings in the checked native and degraded cases. | 68 |
+| [GRAPH-IMMUTABILITY](#graph-immutability) | policy / supported | Serialization retains caller triples, base, bindings and global literal settings in the checked native and degraded cases. | 71 |
 | [FORMAT-DETERMINISM](#format-determinism) | policy / supported | Every guaranteed alias has byte-identical output across hash-seeded processes on a shared-list graph. | 22 |
 | [FORMAT-ALIASES](#format-aliases) | policy / supported | Aliases select the same backend syntax; representative mixed-case names and degraded synonyms preserve their contract. | 19 |
 | [FORMAT-DELEGATION](#format-delegation) | policy / supported | Unmapped plugins are explicitly outside the determinism guarantee; unknown plugins and empty delegated output fail visibly. | 5 |
@@ -49,10 +49,10 @@ harness skips are reported by pytest when executing the suite, not hidden by col
 | [RDF-IRI-BASE](#rdf-iri-base) | normative / supported | Fragment, path, query and equal-base namespaces preserve direct and datatype IRIs in the checked verified renderings. | 43 |
 | [RDF-DATATYPE-GUARD](#rdf-datatype-guard) | policy / supported | Round-trip boundary checks distinguish missing or invented datatype IRIs from xsd:string literal equivalence. | 6 |
 | [TURTLE-QUOTING](#turtle-quoting) | normative / supported | Quoted literals preserve terminal quote/backslash runs, LF, CR and CRLF in checked native and relative-subject outputs. | 31 |
-| [TURTLE-NAMES](#turtle-names) | normative / supported | Punctuation, Unicode-prefix and overlapping-prefix examples preserve subject, predicate, object and datatype IRIs. | 67 |
+| [TURTLE-NAMES](#turtle-names) | normative / supported | Punctuation, Unicode-prefix, overlapping-prefix and unprefixable IRI examples preserve subject, predicate, object and datatype IRIs. | 110 |
 | [TURTLE-COLLECTIONS](#turtle-collections) | normative / supported | Private, shared-head and shared-tail list examples retain cell identity; the degraded path uses explicit list triples. | 9 |
 | [TURTLE-PRESENTATION](#turtle-presentation) | policy / supported | Diff-stable Turtle uses quoted typed literals and inline blank nodes where the graph shape permits. | 3 |
-| [NAMESPACES-ISOLATION](#namespaces-isolation) | policy / supported | Namespace selection preserves caller bindings, reserves generated names and remains stable across processes in checked graph shapes. | 18 |
+| [NAMESPACES-ISOLATION](#namespaces-isolation) | policy / supported | Namespace selection preserves caller bindings, reserves generated names, generates them only where the serializer asks, and remains stable across processes in checked graph shapes. | 33 |
 | [SERIALIZER-VERIFICATION](#serializer-verification) | policy / supported | Verified renderings remove base then prefixes only after failed fidelity checks; final validation and unrelated backend errors propagate. | 15 |
 | [LINE-TERMS](#line-terms) | normative / supported | Line syntaxes refuse relative or malformed IRIs and name the offending term position rather than emit invalid N-Triples or N-Quads. | 11 |
 | [LINE-SEPARATORS](#line-separators) | policy / supported | The internal line sorter preserves Unicode separators inside literals and sorts complete statement lines. | 18 |
@@ -167,7 +167,7 @@ Project contract; no normative standard algorithm is claimed.
 
 | Dimension | Collected evidence or applicability |
 | --- | --- |
-| positive | `tests/serialization/test_literal_fidelity.py::test_serialization_does_not_mutate_input_or_global_normalization` (1)<br>`tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position` (60) |
+| positive | `tests/serialization/test_literal_fidelity.py::test_serialization_does_not_mutate_input_or_global_normalization` (1)<br>`tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position` (60)<br>`tests/serialization/test_namespace_term_positions.py::test_the_caller_graph_and_its_bindings_are_untouched` (3) |
 | negative | Not applicable: This is a transformation of admitted values, not a syntax parser or a new input-rejection API. |
 | boundary | `tests/serialization/test_xml_fidelity.py::test_rdf_xml_is_stable_and_does_not_mutate_input_or_global_settings` (1)<br>`tests/serialization/test_degraded_jsonld.py::test_degraded_json_ld_aliases_are_deterministic_and_leave_input_unchanged` (6) |
 | property | Not applicable: No independent randomized property is claimed for this row; examples establish only the stated dimensions. |
@@ -429,7 +429,7 @@ References: [TURTLE11 §6.4 Escape Sequences](references/turtle.html#sec-escapes
 
 ### TURTLE-NAMES
 
-Punctuation, Unicode-prefix and overlapping-prefix examples preserve subject, predicate, object and datatype IRIs.
+Punctuation, Unicode-prefix, overlapping-prefix and unprefixable IRI examples preserve subject, predicate, object and datatype IRIs.
 
 Features: `deterministic_turtle`, `canonicalize_rdf_graph`, `format.turtle`, `format.trig`, `format.n3`.
 
@@ -440,9 +440,9 @@ References: [TURTLE11 §6.5 Grammar](references/turtle.html#sec-grammar-grammar)
 
 | Dimension | Collected evidence or applicability |
 | --- | --- |
-| positive | `tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position` (60)<br>`tests/serialization/test_prefixed_names.py::test_overlapping_prefixes_and_aliases_remain_optional` (3) |
+| positive | `tests/serialization/test_prefixed_names.py::test_prefixed_names_preserve_every_term_position` (60)<br>`tests/serialization/test_prefixed_names.py::test_overlapping_prefixes_and_aliases_remain_optional` (3)<br>`tests/serialization/test_namespace_term_positions.py::test_deterministic_turtle_writes_a_split_hostile_iri_in_every_position` (6)<br>`tests/serialization/test_namespace_term_positions.py::test_the_canonicalizer_writes_a_split_hostile_iri_in_every_position` (24) |
 | negative | Not applicable: This is a transformation of admitted values, not a syntax parser or a new input-rejection API. |
-| boundary | `tests/serialization/test_prefixed_names.py::test_curie_looking_literal_content_is_data` (3)<br>`tests/serialization/test_prefixed_names.py::test_deterministic_turtle_preserves_curie_looking_literal_content` (1) |
+| boundary | `tests/serialization/test_prefixed_names.py::test_curie_looking_literal_content_is_data` (3)<br>`tests/serialization/test_prefixed_names.py::test_deterministic_turtle_preserves_curie_looking_literal_content` (1)<br>`tests/serialization/test_namespace_term_positions.py::test_the_degraded_path_writes_a_split_hostile_iri_in_every_position` (12)<br>`tests/serialization/test_namespace_term_positions.py::test_a_split_hostile_predicate_is_refused_rather_than_written_invalidly` (1) |
 | property | Not applicable: No independent randomized property is claimed for this row; examples establish only the stated dimensions. |
 | subprocess | Not applicable: This row has no process-state-specific obligation; process determinism is mapped separately. |
 | end-to-end | Not applicable: This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES. |
@@ -488,21 +488,22 @@ References: [TURTLE11 §6.5 Grammar](references/turtle.html#sec-grammar-grammar)
 
 ### NAMESPACES-ISOLATION
 
-Namespace selection preserves caller bindings, reserves generated names and remains stable across processes in checked graph shapes.
+Namespace selection preserves caller bindings, reserves generated names, generates them only where the serializer asks, and remains stable across processes in checked graph shapes.
 
 Features: `deterministic_turtle`, `canonicalize_rdf_graph`.
 
 Project contract; no normative standard algorithm is claimed.
 
+- local: [`diffable_rdf.namespaces:bind_source_namespaces`](../../src/diffable_rdf/namespaces.py).
 - local: [`diffable_rdf.namespaces:prepare_namespaces`](../../src/diffable_rdf/namespaces.py).
 
 | Dimension | Collected evidence or applicability |
 | --- | --- |
-| positive | `tests/serialization/test_namespace_determinism.py::test_caller_prefixes_are_preserved_and_generated_names_are_reserved` (1) |
+| positive | `tests/serialization/test_namespace_determinism.py::test_caller_prefixes_are_preserved_and_generated_names_are_reserved` (1)<br>`tests/serialization/test_namespace_term_positions.py::test_only_the_predicate_position_earns_a_generated_prefix` (1)<br>`tests/serialization/test_namespace_term_positions.py::test_a_bound_namespace_is_used_in_every_position` (3)<br>`tests/serialization/test_namespace_term_positions.py::test_generated_names_follow_the_graph_not_its_insertion_order` (5) |
 | negative | `tests/serialization/test_namespace_determinism.py::test_an_undeclarable_binding_preserves_usable_prefixes` (1) |
-| boundary | `tests/serialization/test_namespace_determinism.py::test_deterministic_turtle_degraded_path_keeps_graph_and_bindings` (1)<br>`tests/serialization/test_namespace_determinism.py::test_the_prefix_filter_matches_what_pyoxigraph_will_accept` (10) |
+| boundary | `tests/serialization/test_namespace_determinism.py::test_deterministic_turtle_degraded_path_keeps_graph_and_bindings` (1)<br>`tests/serialization/test_namespace_determinism.py::test_the_prefix_filter_matches_what_pyoxigraph_will_accept` (10)<br>`tests/serialization/test_namespace_term_positions.py::test_a_keyword_predicate_declares_nothing` (1)<br>`tests/serialization/test_namespace_term_positions.py::test_preprocessing_presents_every_triple_exactly_once` (2)<br>`tests/serialization/test_namespace_term_positions.py::test_a_format_without_positional_discovery_preallocates_in_iri_order` (2) |
 | property | Not applicable: No independent randomized property is claimed for this row; examples establish only the stated dimensions. |
-| subprocess | `tests/serialization/test_namespace_determinism.py::test_namespace_allocation_is_stable_across_processes` (5) |
+| subprocess | `tests/serialization/test_namespace_determinism.py::test_namespace_allocation_is_stable_across_processes` (5)<br>`tests/serialization/test_namespace_term_positions.py::test_split_hostile_output_is_stable_across_processes` (1) |
 | end-to-end | Not applicable: This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES. |
 
 ### SERIALIZER-VERIFICATION

@@ -14,6 +14,20 @@ about it.
 
 ### Changed
 
+- **Turtle-family output declares a generated prefix only where the serializer
+  asks for one.** `deterministic_turtle`, and the fallback rendering of
+  `turtle`, `ttl`, `n3` and `trig`, no longer invent a namespace for every IRI
+  in the graph. A namespace you bound is still used in every position. A
+  namespace you did not bind is now declared only for the predicates that use
+  it: subjects, objects and datatypes in an unbound namespace are written as
+  complete IRIs, so `"42"^^ns2:integer` becomes
+  `"42"^^<http://www.w3.org/2001/XMLSchema#integer>` and unused `@prefix` lines
+  disappear. This is a one-time diff on affected artifacts: regenerate, commit
+  once, and later runs are stable again. To keep a namespace compact in every
+  position, bind it — `well_known_prefix_map()` supplies the standard names.
+  RDF/XML, JSON-LD, N-Triples and N-Quads output is byte-identical, as is
+  Turtle whose namespaces are all bound.
+
 - `wl_blank_node_labels` and `wl_relabel_quads` now reject embedded
   `pyoxigraph.Triple` terms with `ValueError`. They operate on supported
   top-level quad terms only; direction-tagged literals remain supported.
@@ -30,6 +44,14 @@ about it.
 
 ### Fixed
 
+- **Valid IRIs that have no prefixed name are serialized instead of refused.**
+  A subject, object or datatype IRI whose namespace split is not itself a valid
+  IRI — `<http://a.example/%25>` splits into `http://a.example/%` plus `25` —
+  made `deterministic_turtle` raise, because the declaration it produced could
+  not be read back. Such IRIs are now written in full. A *predicate* in that
+  shape is still refused: the namespace there is the RDFLib serializer's own
+  choice, and `canonicalize_rdf_graph`, which writes predicates in full,
+  serializes those graphs.
 - **Multiline Turtle literals preserve a terminal quote after any backslash
   run.** The emitted long-string spelling keeps the literal's exact lexical
   text and remains parseable for Turtle-family output.
