@@ -40,6 +40,7 @@ See ``docs/api.md`` for the full contract.
 import io
 import json
 import logging
+from collections.abc import Callable
 from xml.etree import ElementTree
 
 import pyoxigraph as ox
@@ -52,6 +53,7 @@ from .expanded_jsonld import _is_absolute_iri, serialize_expanded_jsonld
 from .graph_input import _require_single_graph
 from .jsonld import deterministic_json
 from .namespaces import bind_source_namespaces, prepare_namespaces
+from .wl import wl_relabel_quads
 
 logger = logging.getLogger(__name__)
 
@@ -414,7 +416,9 @@ def _with_single_trailing_newline(text: str) -> str:
     return stripped + "\n" if stripped else ""
 
 
-def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -> str:
+def _deterministic_fallback_serialize(
+    graph: rdflib.Graph, output_format: str, diff_stable: bool = False
+) -> str:
     """Serialize a graph that pyoxigraph cannot canonicalize, deterministically.
 
     pyoxigraph rejects some graphs that rdflib accepts -- notably graphs
@@ -432,10 +436,18 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
 
     Relative IRIs are preserved verbatim (not resolved against the base):
     the goal is deterministic output, and silently rewriting them would
-    mask what is really a data problem in the source graph.  The source
-    graph's ``base`` is deliberately not carried across either -- rdflib
-    relativizes against it by naive string prefixing, which corrupts terms
-    under a hash base (see :func:`deterministic_turtle`).
+    mask what is really a data problem in the source graph. The source
+    graph's ``base`` is carried onto formats that can declare one, but only
+    when re-reading the result still yields every absolute IRI of the source;
+    rdflib relativizes by string prefix rather than by RFC 3986 section 5.2.2
+    component resolution, which corrupts terms under a hash, query or
+    partial-segment base. See :func:`_render_preserving_base`.
+
+    ``diff_stable`` cannot be honoured here: Weisfeiler-Leman relabelling
+    consumes pyoxigraph quads, and this path exists precisely because
+    pyoxigraph would not accept the graph. Requesting it warns rather than
+    passing silently, so a caller is never told a stability guarantee applies
+    to bytes that did not receive it.
 
     Turtle-family output is rendered without ``( … )`` collection syntax,
     because that syntax cannot express a list whose tail is referenced more
@@ -443,8 +455,18 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
 
     :param graph: The rdflib Graph that pyoxigraph could not parse.
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
+    :param diff_stable: What the caller asked for; only used to warn that this
+        path cannot deliver it.
     :return: Deterministic string serialization of the graph.
     """
+    if diff_stable:
+        logger.warning(
+            "diff_stable was requested but this graph took the rdflib fallback path, "
+            "where Weisfeiler-Leman relabelling cannot run because it operates on the "
+            "pyoxigraph quads this graph could not produce; blank-node labels are "
+            "canonicalized by rdflib instead, so output remains deterministic but "
+            "labels are not diff-stable across edits"
+        )
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
         # rdflib's N-Triples serializer reuses Turtle's term rendering and does
         # not enforce the absolute-IRI rule, so it will happily write a
@@ -485,9 +507,14 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
         # know the other's internals.
         from .turtle import _NoCollectionTurtleSerializer
 
-        buffer = io.BytesIO()
-        _NoCollectionTurtleSerializer(canonical).serialize(buffer, encoding="utf-8")
-        serialized = buffer.getvalue().decode("utf-8")
+        def render_turtle() -> str:
+            buffer = io.BytesIO()
+            _NoCollectionTurtleSerializer(canonical).serialize(buffer, encoding="utf-8")
+            return buffer.getvalue().decode("utf-8")
+
+        # The text is Turtle whichever collection-capable alias was asked for,
+        # so it is Turtle that has to read back.
+        serialized = _render_preserving_base(graph, canonical, render_turtle, output_format, "turtle")
     else:
         # Serialize an independent single Graph. ``to_canonical_graph``
         # returns a context-aware dataset container, while this branch needs
@@ -506,27 +533,33 @@ def _deterministic_fallback_serialize(graph: rdflib.Graph, output_format: str) -
             if ox_target is not None
             else output_format
         )
-        try:
-            serialized = canonical.serialize(format=serializer_format)
-        except PluginException:
-            # rdflib's own "no such format" error, which the public contract
-            # documents as propagating.
-            raise
-        except Exception as exc:
-            raise ValueError(
-                f"cannot serialize this graph as {output_format!r}: {exc}. This graph "
-                "took the fallback path because pyoxigraph could not parse it, and "
-                f"rdflib's {serializer_format!r} serializer cannot represent it either. "
-                "turtle, ttl, trig and n3 can carry any graph that reaches this path."
-            ) from exc
-        if not serialized.strip() and len(canonical) > 0:
-            # A delegated serializer that writes nothing for a non-empty graph
-            # is silent total loss; refuse rather than return it.
-            raise ValueError(
-                f"rdflib's {serializer_format!r} serializer produced an empty document for a "
-                f"graph of {len(canonical)} triples. Use turtle, ttl, trig or n3, which "
-                "carry any graph that reaches the fallback path."
-            )
+        def render_delegated() -> str:
+            try:
+                text = canonical.serialize(format=serializer_format)
+            except PluginException:
+                # rdflib's own "no such format" error, which the public contract
+                # documents as propagating.
+                raise
+            except Exception as exc:
+                raise ValueError(
+                    f"cannot serialize this graph as {output_format!r}: {exc}. This graph "
+                    "took the fallback path because pyoxigraph could not parse it, and "
+                    f"rdflib's {serializer_format!r} serializer cannot represent it either. "
+                    "turtle, ttl, trig and n3 can carry any graph that reaches this path."
+                ) from exc
+            if not text.strip() and len(canonical) > 0:
+                # A delegated serializer that writes nothing for a non-empty graph
+                # is silent total loss; refuse rather than return it.
+                raise ValueError(
+                    f"rdflib's {serializer_format!r} serializer produced an empty document for a "
+                    f"graph of {len(canonical)} triples. Use turtle, ttl, trig or n3, which "
+                    "carry any graph that reaches the fallback path."
+                )
+            return text
+
+        serialized = _render_preserving_base(
+            graph, canonical, render_delegated, output_format, serializer_format
+        )
     if output_format.lower() in _LINE_ORIENTED_FORMATS:
         # Split on newline characters only. N-Triples permits Unicode line
         # separators inside quoted literals; RDFLib escapes ``\n`` and ``\r``,
@@ -586,6 +619,137 @@ def _is_safe_prefix_iri(iri: str) -> bool:
     return _is_absolute_iri(iri)
 
 
+def _iri_sets(graph: rdflib.Graph) -> tuple[set[str], set[str]]:
+    """Return direct IRI terms and literal datatype IRIs separately.
+
+    :param graph: The graph to read terms from.
+    :return: ``(direct IRI terms, literal datatype IRIs)``.
+    """
+    direct: set[str] = set()
+    datatypes: set[str] = set()
+    for triple in graph:
+        for term in triple:
+            if isinstance(term, rdflib.URIRef):
+                direct.add(str(term))
+            elif isinstance(term, rdflib.Literal) and term.datatype is not None:
+                datatypes.add(str(term.datatype))
+    # RDF 1.1 treats a plain string and an xsd:string literal as the same
+    # literal. Keep that allowance local to datatype positions: an
+    # xsd:string URIRef used directly in a triple remains significant.
+    datatypes.discard(str(rdflib.XSD.string))
+    return direct, datatypes
+
+
+def _absolute_iris_lost(source: rdflib.Graph, serialized: str, parse_format: str) -> set[str]:
+    """Return the absolute IRIs of ``source`` that re-reading ``serialized`` does not yield.
+
+    Only *absolute* terms are examined, and only loss counts. RDF 1.1 Concepts
+    §3.2 requires IRIs in the abstract syntax to be absolute, so those are the
+    terms a serialization is obliged to preserve. A relative term is outside
+    that data model; it reaches this path only because pyoxigraph refused the
+    graph, and on re-reading it always resolves to *some* absolute IRI
+    (RFC 3986 §5.1.3 makes the retrieval URI the base when a document declares
+    none). Newly appearing IRIs are therefore unavoidable and prove nothing,
+    while a *missing* absolute IRI is exactly the damage that relativizing
+    against an unsuitable base does.
+
+    :param source: The graph that was serialized.
+    :param serialized: The text produced for it.
+    :param parse_format: The rdflib parser name for ``serialized``.
+    :return: Absolute source IRIs absent from the re-parsed graph; empty if none.
+    """
+    source_direct, source_datatypes = _iri_sets(source)
+    must_survive = {iri for iri in source_direct | source_datatypes if _is_absolute_iri(iri)}
+
+    reparsed = rdflib.Graph()
+    try:
+        reparsed.parse(data=serialized, format=parse_format)
+    except Exception:
+        # Output that will not parse is a worse result than a dropped base, so
+        # report total loss and let the caller retry the plainer rendering. If
+        # that one is unreadable too, its own verification reports it.
+        return must_survive
+
+    reparsed_direct, reparsed_datatypes = _iri_sets(reparsed)
+    return must_survive - (reparsed_direct | reparsed_datatypes)
+
+
+def _render_preserving_base(
+    graph: rdflib.Graph,
+    canonical: rdflib.Graph,
+    render: Callable[[], str],
+    output_format: str,
+    parse_format: str,
+) -> str:
+    """Render ``canonical``, carrying ``graph.base`` when doing so preserves the graph.
+
+    A document that contains relative references and declares no base is not
+    self-describing: RFC 3986 §5.1.3 hands resolution to the retrieval URI, and
+    §5.1.4 states that "a sender of a representation containing relative
+    references is responsible for ensuring that a base URI for those references
+    can be established". This path emits relative references whenever the
+    source graph holds them, so dropping the directive outright moves the
+    reader's own location into the graph's meaning.
+
+    Carrying it unconditionally is not safe either. rdflib relativizes by
+    string prefix (``rdflib.serializer.Serializer.relativize``) rather than by
+    the component algorithm RFC 3986 §5.2.2 defines and Turtle §6.3 requires,
+    so under a base ending in ``#``, ``?`` or a partial path segment it emits a
+    reference that resolves to a different IRI than the one it was given.
+
+    RFC 3986 specifies resolution and never the inverse, so a relativization
+    has no conformance criterion of its own and the only sound test is to
+    resolve the result back. That is what this does: render with the base,
+    check that every absolute term survives re-reading, and fall back to a
+    rendering without it when one does not.
+
+    :param graph: The source graph, read for its base and its expected terms.
+    :param canonical: The graph being rendered; its ``base`` is set here.
+    :param render: Serializes ``canonical`` as it currently stands.
+    :param output_format: The caller's format name, used in the warning.
+    :param parse_format: The rdflib parser name for ``render``'s output.
+    :return: The rendering that preserves the graph's absolute IRIs.
+    """
+    base = str(graph.base) if graph.base else None
+    # N-Triples and N-Quads have no base directive to carry (N-Triples 1.1
+    # §2.2); rdflib warns and ignores one, so never offer it.
+    if base is None or output_format.lower() in _LINE_ORIENTED_FORMATS:
+        return render()
+    # rdflib stores whatever base it was handed, including text that is not an
+    # IRI at all. Writing that into a directive produces a document no strict
+    # parser will read -- Turtle §6.5 IRIREF admits neither spaces nor braces
+    # nor quotes -- which is a worse outcome than the relativization this is
+    # trying to preserve. Asking pyoxigraph is the check, exactly as
+    # :func:`_is_safe_prefix_iri` does for prefix declarations.
+    if not _is_absolute_iri(base):
+        logger.warning(
+            "the graph's base %r is not a valid absolute IRI, so it cannot be declared "
+            "in %s output (Turtle section 6.5 IRIREF, RFC 3986 section 4.3); serializing "
+            "without the base directive",
+            base,
+            output_format,
+        )
+        return render()
+
+    canonical.base = base
+    serialized = render()
+    lost = _absolute_iris_lost(graph, serialized, parse_format)
+    if not lost:
+        return serialized
+
+    logger.warning(
+        "carrying the graph's base IRI %r into %s output would change %d IRI(s), such as %r, "
+        "because rdflib relativizes by string prefix rather than by RFC 3986 section 5.2.2 "
+        "component resolution; serializing without the base directive",
+        base,
+        output_format,
+        len(lost),
+        sorted(lost)[0],
+    )
+    canonical.base = None
+    return render()
+
+
 def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: str) -> None:
     """Raise if ``serialized`` does not say the same thing as ``source``.
 
@@ -634,24 +798,8 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
     # reference rdflib mis-resolves would otherwise slip past: pyoxigraph
     # resolves it correctly, so comparing only canonical forms compares two
     # correct readings and sees nothing wrong.
-    def iri_sets(graph: rdflib.Graph) -> tuple[set[str], set[str]]:
-        """Return direct IRI terms and literal datatype IRIs separately."""
-        direct: set[str] = set()
-        datatypes: set[str] = set()
-        for triple in graph:
-            for term in triple:
-                if isinstance(term, rdflib.URIRef):
-                    direct.add(str(term))
-                elif isinstance(term, rdflib.Literal) and term.datatype is not None:
-                    datatypes.add(str(term.datatype))
-        # RDF 1.1 treats a plain string and an xsd:string literal as the same
-        # literal. Keep that allowance local to datatype positions: an
-        # xsd:string URIRef used directly in a triple remains significant.
-        datatypes.discard(str(rdflib.XSD.string))
-        return direct, datatypes
-
-    source_direct, source_datatypes = iri_sets(source)
-    reparsed_direct, reparsed_datatypes = iri_sets(reparsed)
+    source_direct, source_datatypes = _iri_sets(source)
+    reparsed_direct, reparsed_datatypes = _iri_sets(reparsed)
     missing = (source_direct - reparsed_direct) | (source_datatypes - reparsed_datatypes)
     invented = (reparsed_direct - source_direct) | (reparsed_datatypes - source_datatypes)
     if missing or invented:
@@ -684,6 +832,7 @@ def _assert_round_trips(source: rdflib.Graph, serialized: str, output_format: st
 def canonicalize_rdf_graph(
     graph: rdflib.Graph,
     output_format: str = "turtle",
+    diff_stable: bool = False,
 ) -> str:
     """Serialize an rdflib Graph deterministically using RDFC-1.0 canonicalization.
 
@@ -718,6 +867,12 @@ def canonicalize_rdf_graph(
         ConjunctiveGraph containers are not supported; select an individual
         graph context.
     :param output_format: Target serialization format (e.g. ``"turtle"``, ``"nt"``).
+    :param diff_stable: Label blank nodes by their local neighbourhood
+        (Weisfeiler-Leman) instead of by RDFC-1.0's whole-graph function, so
+        that editing one part of a graph does not renumber blank nodes
+        elsewhere. Output stays deterministic and isomorphic either way; only
+        the choice of label changes. Not available on the rdflib fallback
+        path, which warns when it is requested.
     :return: Deterministic string serialization of the graph.
     :raises TypeError: If ``graph`` is a Dataset or ConjunctiveGraph container.
     """
@@ -738,7 +893,7 @@ def canonicalize_rdf_graph(
         # serializer. What it cannot fix is a plugin whose *traversal* order
         # varies; see the guarantee wording in the docstring above.
         return _with_single_trailing_newline(
-            _deterministic_fallback_serialize(graph, output_format)
+            _deterministic_fallback_serialize(graph, output_format, diff_stable)
         )
 
     if ox_format == ox.RdfFormat.RDF_XML:
@@ -760,7 +915,7 @@ def canonicalize_rdf_graph(
             "deterministic (blank-node labels are canonicalized via rdflib) but is not "
             "canonicalized with pyoxigraph RDFC-1.0."
         )
-        result = _deterministic_fallback_serialize(graph, output_format)
+        result = _deterministic_fallback_serialize(graph, output_format, diff_stable)
         if ox_format == ox.RdfFormat.RDF_XML:
             # RDFLib escapes literal carriage returns as ``&#13;``. Applying
             # finalization here keeps XML 1.0 representability local to this
@@ -775,8 +930,18 @@ def canonicalize_rdf_graph(
     # 3. Canonicalize blank node labels with RDFC-1.0.
     dataset.canonicalize(ox.CanonicalizationAlgorithm.RDFC_1_0)
 
-    # 4. Sort triples for deterministic ordering.
+    # 3b. Optionally re-label blank nodes for diff stability. RDFC-1.0 labels
+    # are a function of the whole graph, so one added triple can renumber every
+    # blank node in the document and turn a one-line edit into a whole-file
+    # diff. Weisfeiler-Leman labels depend only on a blank node's local
+    # neighbourhood, so unrelated regions keep their labels. Output stays
+    # deterministic and isomorphic either way; this only changes which label
+    # each blank node receives.
     quads = list(dataset)
+    if diff_stable:
+        quads = wl_relabel_quads(quads)
+
+    # 4. Sort triples for deterministic ordering.
     sorted_triples = sorted(
         (ox.Triple(q.subject, q.predicate, q.object) for q in quads),
         key=lambda t: (str(t.subject), str(t.predicate), str(t.object)),
