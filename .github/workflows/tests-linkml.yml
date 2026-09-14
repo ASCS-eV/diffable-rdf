@@ -1,0 +1,104 @@
+name: LinkML Tests
+
+# Canary job: diffable-rdf is consumed by linkml's opt-in `--diff-stable`
+# flag (linkml/linkml#3985). A change here that breaks that integration
+# should be caught in this repo's own CI, not discovered later as a
+# regression after a release. This checks out linkml and runs its
+# diffable-rdf-dependent tests against *this* checkout, installed editable
+# in place of the pinned PyPI release.
+#
+# Modeled on numpydantic's equivalent workflow:
+# https://github.com/p2p-ld/numpydantic/blob/main/.github/workflows/tests-linkml.yml
+#
+# TODO(#62): linkml/linkml#3985 is not merged yet, so linkml/linkml@main
+# does not have the --diff-stable integration (or the `diffable_rdf`
+# pytest marker) to test against. LINKML_REF points at the PR's fork
+# branch until it merges; switch LINKML_REPO to "linkml/linkml" and
+# LINKML_REF to "main" once it does. See #62.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  LINKML_REPO: ASCS-eV/linkml
+  LINKML_REF: feat/diff-stable-serialization
+
+jobs:
+  test-linkml:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Decoupled axes rather than a full cross product, following the
+        # cost philosophy ci.yml's own other-platforms job documents: one
+        # OS gets the Python range, the second OS gets a single version.
+        include:
+          - platform: ubuntu-latest
+            python-version: "3.10"
+          - platform: ubuntu-latest
+            python-version: "3.13"
+          - platform: windows-latest
+            python-version: "3.13"
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout linkml
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.LINKML_REPO }}
+          ref: ${{ env.LINKML_REF }}
+          path: linkml
+
+      - name: Checkout diffable-rdf
+        uses: actions/checkout@v4
+        with:
+          path: diffable-rdf
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Point linkml_runtime at this diffable-rdf checkout
+        working-directory: linkml/packages/linkml_runtime
+        run: uv add --editable ../../../diffable-rdf
+
+      - name: Install dependencies
+        working-directory: linkml
+        run: uv sync --all-groups
+
+      - name: Verify diffable-rdf resolves to this checkout
+        # A canary that could silently exercise the pinned PyPI release
+        # instead of this checkout would be worse than no canary at all,
+        # so this fails loudly rather than merely printing what resolved.
+        working-directory: linkml
+        shell: bash
+        run: |
+          resolved="$(uv run python -c 'import diffable_rdf; print(diffable_rdf.__file__)')"
+          resolved="${resolved//\\//}"
+          echo "diffable_rdf resolved to: $resolved"
+          uv run python -c 'from importlib.metadata import version; print("diffable-rdf version:", version("diffable-rdf"))'
+          case "$resolved" in
+            */diffable-rdf/src/diffable_rdf/*)
+              echo "OK: resolved from the local diffable-rdf checkout" ;;
+            *)
+              echo "::error::diffable_rdf did not resolve under the local diffable-rdf checkout (got: $resolved); the canary would not be testing this change" >&2
+              exit 1 ;;
+          esac
+
+      - name: Run linkml's diffable-rdf canary tests
+        working-directory: linkml
+        # Scoped to the one file that exercises diffable-rdf, with strict
+        # marker checking, so an unrelated collection error elsewhere in
+        # linkml's tree can't fail this job and be mistaken for a
+        # diffable-rdf regression.
+        run: uv run pytest --strict-markers -m diffable_rdf -v tests/linkml_runtime/test_utils/test_rdf_canonicalize.py
