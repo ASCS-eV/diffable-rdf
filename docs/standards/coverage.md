@@ -3,7 +3,7 @@
 Generated from [requirements.json](requirements.json) by `python scripts/check_requirements.py --render`.
 The default command checks this table without modifying it.
 
-49 supported requirements; 5 explicit profile exclusions; 905 distinct collected tests; 1034 requirement-to-test links.
+50 supported requirements; 5 explicit profile exclusions; 907 distinct collected tests; 1036 requirement-to-test links.
 
 Counts describe collected evidence, not executed or passing tests. One test can support several rows.
 This is not a percentage of all clauses in the copied specifications or a complete Cartesian test matrix.
@@ -74,6 +74,7 @@ harness skips are reported by pytest when executing the suite, not hidden by col
 | [WL-IDENTITY](#wl-identity) | policy / supported | WL relabelling returns a fresh isomorphic quad list, preserves blank-node cardinality and leaves input quads untouched. | 10 |
 | [WL-COMPONENTS](#wl-components) | policy / supported | Unrelated additions, edits and removals do not advance a disconnected component's default refinement, including an added class in a complete generated-schema document. | 11 |
 | [WL-TIES](#wl-ties) | policy / supported | Structurally tied nodes remain injective and collision suffixes follow numeric canonical numbering. | 4 |
+| [WL-LABEL-FORM](#wl-label-form) | policy / supported | Generated blank-node labels have the documented form: 'b' followed by 12 hex digits, with an optional numeric collision suffix. | 2 |
 | [WL-GRAPHS](#wl-graphs) | policy / supported | Named graphs influence labels; blank graph-name identifiers remain consistent when also used as object terms. | 4 |
 | [WL-ITERATIONS](#wl-iterations) | policy / supported | Default refinement reaches component fixpoints, explicit rounds remain synchronous, zero is valid and negative counts are refused. | 7 |
 | [WL-BOUNDARY](#wl-boundary) | policy / supported | Embedded triple objects are rejected consistently at zero, explicit and default refinement rounds. | 33 |
@@ -911,6 +912,26 @@ Project contract; no normative standard algorithm is claimed.
 | property | Not applicable: No independent randomized property is claimed for this row; examples establish only the stated dimensions. |
 | subprocess | Not applicable: This row has no process-state-specific obligation; process determinism is mapped separately. |
 | end-to-end | Not applicable: This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES. |
+
+### WL-LABEL-FORM
+
+Generated blank-node labels have the documented form: 'b' followed by 12 hex digits, with an optional numeric collision suffix.
+
+Features: `wl_blank_node_labels`, `wl_relabel_quads`.
+
+Project contract; no normative standard algorithm is claimed.
+
+- local: [`diffable_rdf.wl:wl_blank_node_labels`](../../src/diffable_rdf/wl.py).
+- local: [`diffable_rdf.wl:wl_relabel_quads`](../../src/diffable_rdf/wl.py).
+
+| Dimension | Collected evidence or applicability |
+| --- | --- |
+| positive | `tests/wl/test_wl_contracts.py::test_labels_have_the_documented_form` (1) |
+| negative | Not applicable: This is a transformation of admitted values, not a syntax parser or a new input-rejection API. |
+| boundary | `tests/wl/test_wl_contracts.py::test_tied_labels_share_one_base_and_add_numeric_suffixes` (1) |
+| property | Not applicable: No independent randomized property is claimed for this row; examples establish only the stated dimensions. |
+| subprocess | Not applicable: This row has no process-state-specific obligation; process determinism is mapped separately. |
+| end-to-end | Not applicable: This row isolates the label form; composed documents are mapped in RDF-ISOMORPHISM and WL-COMPONENTS. |
 
 ### WL-GRAPHS
 

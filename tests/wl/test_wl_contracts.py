@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
+
 import pyoxigraph as ox
 import pytest
-from rdflib import BNode, Graph, Namespace
+from rdflib import BNode, Graph, Literal, Namespace
 from rdflib.compare import isomorphic
 
 from diffable_rdf import wl_blank_node_labels, wl_relabel_quads
@@ -299,3 +301,68 @@ def test_wl_fixpoint_resolves_collisions_that_few_rounds_leave_behind() -> None:
 
     assert any("_" in label for label in four_rounds.values()), "four iterations leave tied chain nodes"
     assert all("_" not in label for label in fixpoint.values()), "fixpoint labels require no collision suffix"
+
+
+#: The label form documented in docs/api.md: ``b`` followed by 12 hex digits,
+#: with an optional numeric collision suffix.
+_LABEL_FORM = re.compile(r"b[0-9a-f]{12}(?:_[1-9][0-9]*)?")
+
+
+def _distinct_blank_nodes(count: int) -> Graph:
+    """A graph whose blank nodes are all structurally distinguishable."""
+    graph = Graph()
+    graph.bind("ex", EX)
+    for index in range(count):
+        node = BNode()
+        graph.add((EX.root, EX.has, node))
+        graph.add((node, EX.position, Literal(index)))
+    return graph
+
+
+def _tied_blank_nodes(names: tuple[str, ...]) -> list:
+    """One structurally indistinguishable blank node per input name."""
+    quads = []
+    for name in names:
+        node = ox.BlankNode(name)
+        quads.append(ox.Quad(ox.NamedNode("http://ex/root"), ox.NamedNode("http://ex/has"), node, ox.DefaultGraph()))
+        quads.append(ox.Quad(node, ox.NamedNode("http://ex/kind"), ox.Literal("same"), ox.DefaultGraph()))
+    return quads
+
+
+def test_labels_have_the_documented_form() -> None:
+    """Every label is ``b`` plus exactly 12 hex digits.
+
+    This form is documented in docs/api.md, and consumers match on it rather than
+    merely checking that labels changed: linkml asserts this exact shape in three
+    separate modules to confirm its ``--diff-stable`` flag reached the serializer.
+    Widening the hash or changing the prefix therefore breaks them, so the form is
+    pinned here instead of being discovered downstream.
+    """
+    labels = wl_blank_node_labels(_canonical_quads(_distinct_blank_nodes(4)))
+
+    assert len(labels) == 4
+    assert len(set(labels.values())) == 4
+    for label in labels.values():
+        assert _LABEL_FORM.fullmatch(label), label
+        assert len(label) == 13, "an untied label carries no collision suffix"
+
+
+def test_tied_labels_share_one_base_and_add_numeric_suffixes() -> None:
+    """Tied nodes keep the documented base form and differ only by the suffix."""
+    names = ("c14n0", "c14n1", "c14n2")
+    quads = _tied_blank_nodes(names)
+
+    labels = wl_blank_node_labels(quads)
+    relabelled = {
+        term.value
+        for quad in wl_relabel_quads(quads)
+        for term in (quad.subject, quad.object)
+        if isinstance(term, ox.BlankNode)
+    }
+
+    assert len(set(labels.values())) == len(names), "labels must stay injective"
+    assert set(labels.values()) == relabelled, "relabelled quads carry the reported labels"
+    assert len({label.partition("_")[0] for label in labels.values()}) == 1, "tied nodes share one base"
+    for label in labels.values():
+        assert _LABEL_FORM.fullmatch(label), label
+    assert sorted(label.partition("_")[2] for label in labels.values()) == ["", "1", "2"]
