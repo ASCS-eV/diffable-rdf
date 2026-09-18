@@ -149,7 +149,7 @@ def _relabelled(graph: Graph) -> Graph:
 
 
 def _reordered(graph: Graph) -> Graph:
-    """The same graph with its triples inserted in the opposite order."""
+    """The same graph with its triples inserted in descending term order."""
     reordered = Graph()
     for prefix, namespace in graph.namespaces():
         reordered.bind(prefix, namespace)
@@ -169,6 +169,11 @@ def _renderings() -> list:
         pytest.param(lambda g: canonicalize_rdf_graph(g, "xml"), "xml", id="canonical_xml"),
         pytest.param(lambda g: canonicalize_rdf_graph(g, "json-ld"), "json-ld", id="canonical_jsonld"),
     ]
+
+
+def _render_only() -> list:
+    """The same renderings, for checks that never re-parse the output."""
+    return [pytest.param(case.values[0], id=case.id) for case in _renderings()]
 
 
 def test_fixture_contains_the_shapes_the_other_tests_rely_on() -> None:
@@ -218,14 +223,14 @@ def test_every_rendering_is_idempotent(render, parse_format: str) -> None:
     assert second == first
 
 
-@pytest.mark.parametrize(("render", "parse_format"), _renderings())
-def test_every_rendering_ignores_incoming_blank_node_names(render, parse_format: str) -> None:
+@pytest.mark.parametrize("render", _render_only())
+def test_every_rendering_ignores_incoming_blank_node_names(render) -> None:
     """Renaming every blank node must not change a single byte."""
     assert render(_relabelled(_schema_graph())) == render(_schema_graph())
 
 
-@pytest.mark.parametrize(("render", "parse_format"), _renderings())
-def test_every_rendering_ignores_insertion_order(render, parse_format: str) -> None:
+@pytest.mark.parametrize("render", _render_only())
+def test_every_rendering_ignores_insertion_order(render) -> None:
     """Inserting the same triples in another order must not change a single byte."""
     assert render(_reordered(_schema_graph())) == render(_schema_graph())
 

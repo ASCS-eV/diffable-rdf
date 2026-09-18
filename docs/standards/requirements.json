@@ -2121,6 +2121,44 @@
       }
     },
     {
+      "id": "WL-LABEL-FORM",
+      "description": "Generated blank-node labels have the documented form: 'b' followed by 12 hex digits, with an optional numeric collision suffix.",
+      "features": [
+        "wl_blank_node_labels",
+        "wl_relabel_quads"
+      ],
+      "category": "policy",
+      "clauses": [],
+      "owners": [
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_blank_node_labels",
+          "path": "src/diffable_rdf/wl.py"
+        },
+        {
+          "role": "local",
+          "target": "diffable_rdf.wl:wl_relabel_quads",
+          "path": "src/diffable_rdf/wl.py"
+        }
+      ],
+      "status": "supported",
+      "reason": null,
+      "evidence": {
+        "positive": [
+          "tests/wl/test_wl_contracts.py::test_labels_have_the_documented_form"
+        ],
+        "boundary": [
+          "tests/wl/test_wl_contracts.py::test_tied_labels_share_one_base_and_add_numeric_suffixes"
+        ]
+      },
+      "not_applicable": {
+        "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
+        "property": "No independent randomized property is claimed for this row; examples establish only the stated dimensions.",
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
+        "end-to-end": "This row isolates the label form; composed documents are mapped in RDF-ISOMORPHISM and WL-COMPONENTS."
+      }
+    },
+    {
       "id": "WL-GRAPHS",
       "description": "Named graphs influence labels; blank graph-name identifiers remain consistent when also used as object terms.",
       "features": [
