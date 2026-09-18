@@ -595,7 +595,7 @@
     },
     {
       "id": "RDF-ISOMORPHISM",
-      "description": "Seeded Turtle graph shapes preserve RDF graph identity after serialization and parsing.",
+      "description": "Seeded Turtle graph shapes and a complete generated-schema document preserve RDF graph identity after serialization and parsing.",
       "features": [
         "deterministic_turtle"
       ],
@@ -623,18 +623,21 @@
         ],
         "positive": [
           "tests/properties/test_canonicalization_properties.py::test_p1_canonical_output_is_lossless"
+        ],
+        "end-to-end": [
+          "tests/integration/test_naturalistic_schema.py::test_every_rendering_preserves_the_document",
+          "tests/integration/test_naturalistic_schema.py::test_the_document_survives_a_named_node_rename"
         ]
       },
       "not_applicable": {
         "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
         "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
-        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
-        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately."
       }
     },
     {
       "id": "TURTLE-STABILITY",
-      "description": "Seeded Turtle output is idempotent and independent of insertion order and source blank-node names.",
+      "description": "Seeded Turtle output and every rendering of a complete generated-schema document are idempotent and independent of insertion order and source blank-node names.",
       "features": [
         "deterministic_turtle"
       ],
@@ -657,13 +660,17 @@
         ],
         "positive": [
           "tests/properties/test_canonicalization_properties.py::test_p2_canonicalization_is_idempotent"
+        ],
+        "end-to-end": [
+          "tests/integration/test_naturalistic_schema.py::test_every_rendering_is_idempotent",
+          "tests/integration/test_naturalistic_schema.py::test_every_rendering_ignores_incoming_blank_node_names",
+          "tests/integration/test_naturalistic_schema.py::test_every_rendering_ignores_insertion_order"
         ]
       },
       "not_applicable": {
         "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
         "boundary": "No additional boundary beyond the explicitly listed examples is claimed by this row.",
-        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
-        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately."
       }
     },
     {
@@ -2023,7 +2030,7 @@
     },
     {
       "id": "WL-COMPONENTS",
-      "description": "Unrelated additions, edits and removals do not advance a disconnected component's default refinement.",
+      "description": "Unrelated additions, edits and removals do not advance a disconnected component's default refinement, including an added class in a complete generated-schema document.",
       "features": [
         "wl_blank_node_labels",
         "wl_relabel_quads",
@@ -2062,12 +2069,15 @@
         "boundary": [
           "tests/wl/test_wl_components.py::test_shared_blank_subject_object_roles_form_one_component",
           "tests/wl/test_wl_components.py::test_graph_membership_does_not_join_signature_independent_components"
+        ],
+        "end-to-end": [
+          "tests/integration/test_naturalistic_schema.py::test_adding_a_class_rewrites_nothing_rdfc_alone_would_rewrite",
+          "tests/integration/test_naturalistic_schema.py::test_adding_a_class_keeps_every_untouched_statement_verbatim"
         ]
       },
       "not_applicable": {
         "negative": "This is a transformation of admitted values, not a syntax parser or a new input-rejection API.",
-        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately.",
-        "end-to-end": "This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES."
+        "subprocess": "This row has no process-state-specific obligation; process determinism is mapped separately."
       }
     },
     {

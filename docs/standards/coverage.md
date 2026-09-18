@@ -3,7 +3,7 @@
 Generated from [requirements.json](requirements.json) by `python scripts/check_requirements.py --render`.
 The default command checks this table without modifying it.
 
-49 supported requirements; 5 explicit profile exclusions; 874 distinct collected tests; 1003 requirement-to-test links.
+49 supported requirements; 5 explicit profile exclusions; 905 distinct collected tests; 1034 requirement-to-test links.
 
 Counts describe collected evidence, not executed or passing tests. One test can support several rows.
 This is not a percentage of all clauses in the copied specifications or a complete Cartesian test matrix.
@@ -42,8 +42,8 @@ harness skips are reported by pytest when executing the suite, not hidden by col
 | [FORMAT-FRAMING](#format-framing) | policy / supported | Nonempty mapped RDF output has exactly one trailing newline on normal and carrying degraded paths. | 41 |
 | [FORMAT-EMPTY](#format-empty) | policy / supported | Empty Turtle and N-Triples stay empty; empty JSON-LD is a newline-terminated empty array. | 1 |
 | [GRAPH-DEFAULT](#graph-default) | normative / supported | Single-graph N-Quads has no graph label; degraded TriG carries explicit default-graph list triples. | 27 |
-| [RDF-ISOMORPHISM](#rdf-isomorphism) | normative / supported | Seeded Turtle graph shapes preserve RDF graph identity after serialization and parsing. | 40 |
-| [TURTLE-STABILITY](#turtle-stability) | policy / supported | Seeded Turtle output is idempotent and independent of insertion order and source blank-node names. | 120 |
+| [RDF-ISOMORPHISM](#rdf-isomorphism) | normative / supported | Seeded Turtle graph shapes and a complete generated-schema document preserve RDF graph identity after serialization and parsing. | 48 |
+| [TURTLE-STABILITY](#turtle-stability) | policy / supported | Seeded Turtle output and every rendering of a complete generated-schema document are idempotent and independent of insertion order and source blank-node names. | 141 |
 | [RDF-LEXICAL](#rdf-lexical) | normative / supported | Checked integer, boolean, dateTime, decimal, signed-zero and non-finite literal spellings retain lexical term identity. | 18 |
 | [RDF-LANGUAGE](#rdf-language) | normative / supported | Plain strings and xsd:string render equivalently; normal-path language tags use the permitted lowercase spelling. | 4 |
 | [RDF-IRI-BASE](#rdf-iri-base) | normative / supported | Fragment, path, query and equal-base namespaces preserve direct and datatype IRIs in the checked verified renderings. | 43 |
@@ -72,7 +72,7 @@ harness skips are reported by pytest when executing the suite, not hidden by col
 | [JSON-UNKNOWN](#json-unknown) | policy / supported | Unknown remote, scoped and unsupported local contexts conservatively preserve descendant arrays and never fetch remote contexts. | 5 |
 | [JSON-OVERRIDES](#json-overrides) | policy / supported | Custom preserved-key sets replace convenience defaults without disabling keyword-based list protection. | 4 |
 | [WL-IDENTITY](#wl-identity) | policy / supported | WL relabelling returns a fresh isomorphic quad list, preserves blank-node cardinality and leaves input quads untouched. | 10 |
-| [WL-COMPONENTS](#wl-components) | policy / supported | Unrelated additions, edits and removals do not advance a disconnected component's default refinement. | 9 |
+| [WL-COMPONENTS](#wl-components) | policy / supported | Unrelated additions, edits and removals do not advance a disconnected component's default refinement, including an added class in a complete generated-schema document. | 11 |
 | [WL-TIES](#wl-ties) | policy / supported | Structurally tied nodes remain injective and collision suffixes follow numeric canonical numbering. | 4 |
 | [WL-GRAPHS](#wl-graphs) | policy / supported | Named graphs influence labels; blank graph-name identifiers remain consistent when also used as object terms. | 4 |
 | [WL-ITERATIONS](#wl-iterations) | policy / supported | Default refinement reaches component fixpoints, explicit rounds remain synchronous, zero is valid and negative counts are refused. | 7 |
@@ -292,7 +292,7 @@ References: [NQUADS11 §2.1 Simple Statements](references/n-quads.html#simple-tr
 
 ### RDF-ISOMORPHISM
 
-Seeded Turtle graph shapes preserve RDF graph identity after serialization and parsing.
+Seeded Turtle graph shapes and a complete generated-schema document preserve RDF graph identity after serialization and parsing.
 
 Features: `deterministic_turtle`.
 
@@ -307,11 +307,11 @@ References: [RDF11-CONCEPTS §3.6 Graph Comparison](references/rdf11-concepts.ht
 | boundary | Not applicable: No additional boundary beyond the explicitly listed examples is claimed by this row. |
 | property | `tests/properties/test_canonicalization_properties.py::test_p1_canonical_output_is_lossless` (40) |
 | subprocess | Not applicable: This row has no process-state-specific obligation; process determinism is mapped separately. |
-| end-to-end | Not applicable: This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES. |
+| end-to-end | `tests/integration/test_naturalistic_schema.py::test_every_rendering_preserves_the_document` (7)<br>`tests/integration/test_naturalistic_schema.py::test_the_document_survives_a_named_node_rename` (1) |
 
 ### TURTLE-STABILITY
 
-Seeded Turtle output is idempotent and independent of insertion order and source blank-node names.
+Seeded Turtle output and every rendering of a complete generated-schema document are idempotent and independent of insertion order and source blank-node names.
 
 Features: `deterministic_turtle`.
 
@@ -326,7 +326,7 @@ Project contract; no normative standard algorithm is claimed.
 | boundary | Not applicable: No additional boundary beyond the explicitly listed examples is claimed by this row. |
 | property | `tests/properties/test_canonicalization_properties.py::test_p2_canonicalization_is_idempotent` (40)<br>`tests/properties/test_canonicalization_properties.py::test_p3_output_does_not_depend_on_blank_node_labels` (40)<br>`tests/properties/test_canonicalization_properties.py::test_p4_output_does_not_depend_on_insertion_order` (40) |
 | subprocess | Not applicable: This row has no process-state-specific obligation; process determinism is mapped separately. |
-| end-to-end | Not applicable: This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES. |
+| end-to-end | `tests/integration/test_naturalistic_schema.py::test_every_rendering_is_idempotent` (7)<br>`tests/integration/test_naturalistic_schema.py::test_every_rendering_ignores_incoming_blank_node_names` (7)<br>`tests/integration/test_naturalistic_schema.py::test_every_rendering_ignores_insertion_order` (7) |
 
 ### RDF-LEXICAL
 
@@ -873,7 +873,7 @@ References: [RDF11-CONCEPTS §3.6 Graph Comparison](references/rdf11-concepts.ht
 
 ### WL-COMPONENTS
 
-Unrelated additions, edits and removals do not advance a disconnected component's default refinement.
+Unrelated additions, edits and removals do not advance a disconnected component's default refinement, including an added class in a complete generated-schema document.
 
 Features: `wl_blank_node_labels`, `wl_relabel_quads`, `deterministic_turtle`.
 
@@ -890,7 +890,7 @@ Project contract; no normative standard algorithm is claimed.
 | boundary | `tests/wl/test_wl_components.py::test_shared_blank_subject_object_roles_form_one_component` (1)<br>`tests/wl/test_wl_components.py::test_graph_membership_does_not_join_signature_independent_components` (2) |
 | property | `tests/wl/test_wl_components.py::test_component_labels_ignore_input_order_and_blank_node_names` (1) |
 | subprocess | Not applicable: This row has no process-state-specific obligation; process determinism is mapped separately. |
-| end-to-end | Not applicable: This row isolates a contract dimension; executable composed workflows are mapped in API-EXAMPLES. |
+| end-to-end | `tests/integration/test_naturalistic_schema.py::test_adding_a_class_rewrites_nothing_rdfc_alone_would_rewrite` (1)<br>`tests/integration/test_naturalistic_schema.py::test_adding_a_class_keeps_every_untouched_statement_verbatim` (1) |
 
 ### WL-TIES
 
