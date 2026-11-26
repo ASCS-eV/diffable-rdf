@@ -70,6 +70,34 @@ jobs:
       - name: Run tests
         run: .venv/bin/python -m pytest -q --package-under-test=source
 
+  rdflib-8:
+    # rdflib 8 is not on PyPI yet, and it changes the serializer this library
+    # extends: its Turtle serializer is a new line-oriented one, the previous
+    # serializer is kept as OrigTurtleSerializer, and that serializer's methods
+    # are renamed to snake_case. This job runs the suite against a pinned
+    # rdflib 8 build, the ENVITED-X snapshot of the ASCS-eV fork (upstream main
+    # plus open upstream pull requests). Replace it with the PyPI release once
+    # rdflib 8 is published.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install against rdflib 8
+        run: |
+          uv venv --clear
+          uv pip install -e . "pytest>=8.0" "rdflib @ git+https://github.com/ASCS-eV/rdflib.git@envited-x/2026.11.25"
+
+      - name: Show what resolved
+        run: uv pip list
+
+      - name: Run tests
+        run: .venv/bin/python -m pytest -q --package-under-test=source
+
   wheel:
     # The wheel job verifies the exact artifact that the build produced.
     runs-on: ubuntu-latest

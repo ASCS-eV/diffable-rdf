@@ -92,7 +92,7 @@ _JSON_FORMATS = frozenset({"json-ld", "jsonld", "application/ld+json"})
 # it is rendered without collection syntax instead. Explicit
 # rdf:first/rdf:rest can express any arrangement of cells, shared or not.
 # ``n3`` and ``trig`` are included because rdflib's N3Serializer and
-# TrigSerializer both subclass TurtleSerializer and inherit its ``( … )``
+# TrigSerializer both subclass a Turtle serializer and inherit its ``( … )``
 # rendering; rendering them through _NoCollectionTurtleSerializer instead is
 # sound because Turtle is a subset of both, so collection-free Turtle text is
 # also valid N3 and valid TriG. For TriG that is additionally the only way it

@@ -1,11 +1,16 @@
 """Base-IRI contracts for the rdflib fallback path.
 
-Graphs that pyoxigraph refuses reach a plain rdflib serializer, which
-relativizes by string prefix (``rdflib.serializer.Serializer.relativize``)
+Graphs that pyoxigraph refuses reach a plain rdflib serializer. Before rdflib
+8 it relativizes by string prefix (``rdflib.serializer.Serializer.relativize``)
 rather than by the component algorithm RFC 3986 section 5.2.2 defines and
 Turtle section 6.3 requires. Carrying a base is therefore correct for some
 bases and destructive for others, and RFC 3986 specifies only resolution --
 never its inverse -- so the sole sound test is to resolve the output back.
+
+rdflib 8 relativizes only where the reference resolves back to the same IRI,
+so under it no base in this module is destructive by itself. The cases that
+need a destructive serializer install the earlier relativization, which keeps
+them testing this package's check rather than rdflib's version.
 """
 
 from __future__ import annotations
@@ -13,6 +18,7 @@ from __future__ import annotations
 import logging
 
 import pytest
+import rdflib.serializer
 from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.compare import isomorphic
 
@@ -39,6 +45,19 @@ def _fallback_graph(base: str, subjects: list[str]) -> Graph:
         graph.add((URIRef(subject), EX.p, Literal("v")))
     graph.add((FALLBACK_TRIGGER, EX.p, Literal("v")))
     return graph
+
+
+@pytest.fixture
+def prefix_relativizing_serializer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Relativize by string prefix, as rdflib's serializer does before rdflib 8."""
+
+    def relativize(self, uri):
+        base = self.base
+        if base is not None and uri.startswith(base):
+            return URIRef(uri.replace(base, "", 1))
+        return uri
+
+    monkeypatch.setattr(rdflib.serializer.Serializer, "relativize", relativize)
 
 
 def _absolute_terms(graph: Graph) -> set[str]:
@@ -89,13 +108,14 @@ def test_a_preserving_base_is_declared(base: str, subjects: list[str]) -> None:
     assert _absolute_terms(Graph().parse(data=result, format="turtle")) >= _absolute_terms(graph)
 
 
+@pytest.mark.usefixtures("prefix_relativizing_serializer")
 @pytest.mark.parametrize(("base", "subjects"), CORRUPTING_BASES)
 def test_a_corrupting_base_is_dropped(base: str, subjects: list[str]) -> None:
     """The fallback drops a base whose declaration would change a term.
 
-    rdflib's prefix-string relativization is not RFC 3986 section 5.2.2
-    resolution, so under these bases it emits references that resolve to
-    different IRIs than the ones it was given.
+    Prefix-string relativization is not RFC 3986 section 5.2.2 resolution, so
+    under these bases it emits references that resolve to different IRIs than
+    the ones it was given.
     """
     graph = _fallback_graph(base, subjects)
 
@@ -119,6 +139,7 @@ def test_every_absolute_term_survives_whatever_the_base(base: str, subjects: lis
     assert _absolute_terms(Graph().parse(data=result, format="turtle")) >= _absolute_terms(graph)
 
 
+@pytest.mark.usefixtures("prefix_relativizing_serializer")
 @pytest.mark.parametrize(("base", "subjects"), CORRUPTING_BASES)
 def test_dropping_a_base_names_the_term_it_would_have_lost(
     base: str, subjects: list[str], caplog: pytest.LogCaptureFixture
@@ -246,6 +267,7 @@ def test_a_declared_base_makes_the_document_independent_of_where_it_is_read() ->
     }
 
 
+@pytest.mark.usefixtures("prefix_relativizing_serializer")
 def test_without_a_declared_base_the_reader_location_leaks_in() -> None:
     """Establish that the guarantee above is not vacuous.
 

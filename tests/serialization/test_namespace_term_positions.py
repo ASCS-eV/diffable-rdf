@@ -180,13 +180,18 @@ def test_preprocessing_presents_every_triple_exactly_once(serializer_name: str) 
     graph.add((URIRef("http://a.example/s2"), PREDICATE, tail))
     seen: list = []
 
-    class _CountingSerializer(serializer_class):  # type: ignore[misc, valid-type]
-        def preprocessTriple(self, triple):  # noqa: N802
-            seen.append(triple)
-            super().preprocessTriple(triple)
+    # Count under the name the installed rdflib calls; rdflib 8 renamed it.
+    name = turtle_module._PREPROCESS_TRIPLE
+    inherited = getattr(serializer_class, name)
+
+    def counting(self, triple):
+        seen.append(triple)
+        inherited(self, triple)
+
+    counting_serializer = type("_CountingSerializer", (serializer_class,), {name: counting})
 
     buffer = io.BytesIO()
-    _CountingSerializer(graph).serialize(buffer, encoding="utf-8")
+    counting_serializer(graph).serialize(buffer, encoding="utf-8")
 
     assert Counter(seen) == Counter(graph)
 
@@ -271,10 +276,16 @@ def test_a_split_hostile_predicate_is_refused_rather_than_written_invalidly() ->
     returning it, and the canonicalizer's normal path, which spells predicates
     in full, still writes the graph.
     """
+    from diffable_rdf import turtle as turtle_module
+
     graph = Graph(bind_namespaces="none")
     graph.add((SUBJECT, URIRef(SPLIT_HOSTILE_IRIS["percent-escape"]), OBJECT))
 
-    unassisted = graph.serialize(format="turtle")
+    # The serializer this library extends, unassisted. From rdflib 8 on it is
+    # no longer the one ``format="turtle"`` selects.
+    buffer = io.BytesIO()
+    turtle_module._CompactTurtleSerializer(graph).serialize(buffer, encoding="utf-8")
+    unassisted = buffer.getvalue().decode("utf-8")
     assert "@prefix ns1: <http://a.example/%>" in unassisted, "the premise of this case no longer holds"
     with pytest.raises(SyntaxError):
         list(pyoxigraph.parse(unassisted, format=pyoxigraph.RdfFormat.TURTLE))

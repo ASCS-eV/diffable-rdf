@@ -9,10 +9,12 @@ from __future__ import annotations
 import io
 
 import pyoxigraph as ox
+import rdflib
 from rdflib import BNode, Graph, Literal, Namespace, RDF
 from rdflib.compare import isomorphic
 
 EX = Namespace("http://example.org/")
+RDFLIB_MAJOR = int(rdflib.__version__.split(".")[0])
 
 # An N-Triples escape decodes to one carriage return in the literal value.
 CR_NTRIPLES = '<http://example.org/s> <http://example.org/p> "a\\rb" .\n'
@@ -32,12 +34,19 @@ def _shared_tail_graph() -> Graph:
     return graph
 
 
-def test_rdflib_jsonld_serializer_does_not_preserve_shared_list_tail() -> None:
-    """RDFLib JSON-LD list compaction does not preserve a shared tail."""
+def test_rdflib_jsonld_serializer_preserves_a_shared_list_tail_only_from_rdflib_8() -> None:
+    """RDFLib JSON-LD list compaction loses a shared tail before rdflib 8.
+
+    rdflib 8 no longer inlines a list cell that another node refers to, so
+    the tail survives the round trip there.
+    """
     graph = _shared_tail_graph()
     serialized = graph.serialize(format="json-ld")
     reparsed = Graph().parse(data=serialized, format="json-ld")
 
+    if RDFLIB_MAJOR >= 8:
+        assert isomorphic(graph, reparsed), "rdflib 8's JSON-LD serializer keeps a shared RDF list tail"
+        return
     assert not isomorphic(graph, reparsed), (
         "RDFLib JSON-LD serialization preserved a shared RDF list tail. "
         "Reassess the adapter boundary before selecting this serializer for shared-list graphs. "

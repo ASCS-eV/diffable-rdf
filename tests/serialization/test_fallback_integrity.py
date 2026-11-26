@@ -31,6 +31,9 @@ UNICODE_BREAKS = [
 
 LINE_ORIENTED = ["nt", "ntriples", "n-triples", "nt11", "nquads", "n-quads"]
 
+# The characters N-Triples 1.1 can also write as an ECHAR escape.
+NT_ECHARS = {"\t": "\\t", "\b": "\\b", "\n": "\\n", "\r": "\\r", "\f": "\\f"}
+
 
 # Two ways to reach the fallback. Both are terms rdflib accepts and pyoxigraph
 # rejects, which is what the fallback exists for.
@@ -69,7 +72,15 @@ def test_the_line_sort_preserves_a_literal_carrying_a_unicode_break(
     assert len(reparsed) == len(graph)
     assert isomorphic(reparsed, graph)
     assert reparsed.value(EX.s, EX.p) == value
-    assert separator in result, "the separator must survive verbatim"
+    # rdflib before 8 writes the separator raw, which a split on more than "\n"
+    # would break apart; rdflib 8 writes the C0 controls among these as
+    # N-Triples escapes. Either way the text must still carry it.
+    escapes = {f"\\u{ord(separator):04X}", f"\\u{ord(separator):04x}"}
+    if separator in NT_ECHARS:
+        escapes.add(NT_ECHARS[separator])
+    assert separator in result or any(escape in result for escape in escapes), (
+        "the separator must survive, verbatim or as its N-Triples escape"
+    )
 
 
 @pytest.mark.parametrize("output_format", ["nt", "nquads"])
@@ -140,7 +151,8 @@ def test_a_fallback_serializer_error_names_the_format_and_a_way_forward() -> Non
     message = str(raised.value)
     assert "xml" in message
     assert "turtle" in message, "an alternative that works must be named"
-    assert "Can't split" in message, "the underlying cause should stay visible"
+    # rdflib before 8 says "Can't split", rdflib 8 "cannot be split".
+    assert "Can't split" in message or "cannot be split" in message, "the underlying cause should stay visible"
     assert raised.value.__cause__ is not None, "the original error must be chained"
 
 
