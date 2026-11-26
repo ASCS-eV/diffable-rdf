@@ -13,7 +13,7 @@ coupling independent concerns.
 | `properties/` | Seeded graph invariants | losslessness, idempotence, label independence, insertion-order independence |
 | `json/` | Deterministic JSON and JSON-LD semantics | key ordering, mixed key types, list-order preservation |
 | `wl/` | Weisfeiler-Lehman labels and relabelled quads | graph isomorphism, named graphs, collision handling, fixpoints |
-| `dependencies/` | Direct dependency serializer capabilities | shared RDF lists, XML carriage returns |
+| `dependencies/` | Direct dependency serializer capabilities | shared RDF lists, XML carriage returns, Turtle serializer hooks |
 | `integration/` | End-to-end public workflows | package entry points and complete documents |
 | `performance/` | Bounded process-resource workloads | canonicalization time and WL address space |
 

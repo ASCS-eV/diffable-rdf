@@ -7,11 +7,40 @@ Weisfeiler-Lehman blank-node hashing -> idiomatic rdflib re-serialization.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import pyoxigraph
 from rdflib import BNode, Graph, Literal, URIRef
-from rdflib.plugins.serializers.turtle import TurtleSerializer
 from rdflib.term import Node
+
+if TYPE_CHECKING:
+    from rdflib.plugins.serializers.turtle import TurtleSerializer as _CompactTurtleSerializer
+else:
+    try:
+        # rdflib 8 made its line-oriented "longturtle" layout the Turtle
+        # serializer and kept the previous one, whose layout this library
+        # writes, as OrigTurtleSerializer.
+        from rdflib.plugins.serializers.origturtle import (
+            OrigTurtleSerializer as _CompactTurtleSerializer,
+        )
+    except ImportError:  # rdflib < 8, where the Turtle serializer is that one
+        from rdflib.plugins.serializers.turtle import (
+            TurtleSerializer as _CompactTurtleSerializer,
+        )
+
+
+def _rdflib_name(snake_case: str, camel_case: str) -> str:
+    """Return the name the installed rdflib gives a member of its serializer.
+
+    rdflib 8 renamed the serializer's methods and attributes from camelCase to
+    snake_case, without aliases. The base class decides, not an instance, so a
+    subclass that defines the other spelling cannot redirect the lookup.
+    """
+    return snake_case if hasattr(_CompactTurtleSerializer, snake_case) else camel_case
+
+
+_PREPROCESS_TRIPLE = _rdflib_name("preprocess_triple", "preprocessTriple")
+_PREDICATE_ORDER = _rdflib_name("predicate_order", "predicateOrder")
 
 logger = logging.getLogger(__name__)
 
@@ -44,10 +73,16 @@ def _quote_turtle_string(text: str) -> str:
     return '"' + encoded + '"'
 
 
-class _LiteralPreservingTurtleSerializer(TurtleSerializer):
-    """Turtle serializer that writes literals exactly as the graph holds them."""
+class _LiteralPreservingTurtleSerializer(_CompactTurtleSerializer):
+    """Turtle serializer that writes literals exactly as the graph holds them.
 
-    def sortProperties(self, properties):  # noqa: N802
+    rdflib 8 renamed the serializer's methods and attributes from camelCase to
+    snake_case, without aliases. Each hook below is therefore defined under
+    both names, as rdflib calls only the one its version knows, and what this
+    class calls or reads from rdflib is looked up under the installed name.
+    """
+
+    def sort_properties(self, properties):
         """Order predicates, and each predicate's objects, by a total key.
 
         This deliberately does not call ``super()``. rdflib's implementation
@@ -65,7 +100,7 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
 
         ordered: list = []
         seen = set()
-        for predicate in self.predicateOrder:
+        for predicate in getattr(self, _PREDICATE_ORDER):
             if predicate in properties and predicate not in seen:
                 ordered.append(predicate)
                 seen.add(predicate)
@@ -74,6 +109,9 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
                 ordered.append(predicate)
                 seen.add(predicate)
         return ordered
+
+    # The name rdflib < 8 calls.
+    sortProperties = sort_properties
 
     @staticmethod
     def _term_sort_key(node: Node) -> tuple:
@@ -113,8 +151,9 @@ class _LiteralPreservingTurtleSerializer(TurtleSerializer):
         graph that needs the collection-free rendering gets a second serializer
         instance, not a second pass over this one.
         """
+        preprocess_triple = getattr(self, _PREPROCESS_TRIPLE)
         for triple in sorted(self.store, key=self._triple_sort_key):
-            self.preprocessTriple(triple)
+            preprocess_triple(triple)
 
     def label(self, node: Node, position: int) -> str:
         from rdflib import Literal
@@ -164,8 +203,11 @@ class _NoCollectionTurtleSerializer(_LiteralPreservingTurtleSerializer):
     need it.
     """
 
-    def isValidList(self, l_: Node) -> bool:
+    def is_valid_list(self, l_: Node) -> bool:
         return False
+
+    # The name rdflib < 8 calls.
+    isValidList = is_valid_list
 
 
 def _canonical_dataset_form(dataset: pyoxigraph.Dataset) -> str:

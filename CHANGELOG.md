@@ -12,6 +12,38 @@ about it.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-26
+
+**Output bytes unchanged.** This release makes the library work with rdflib 8,
+which is not on PyPI yet, and its output is byte-identical under rdflib 7 and
+8, except where a graph on the fallback path carries a base; see Changed.
+
+### Fixed
+
+- `deterministic_turtle`, and the Turtle-family fallback of
+  `canonicalize_rdf_graph`, work under rdflib 8. rdflib 8 made its
+  line-oriented "longturtle" layout the Turtle serializer, kept the previous
+  serializer as `OrigTurtleSerializer`, and renamed that serializer's methods
+  from camelCase to snake_case without aliases. `deterministic_turtle` raised
+  `AttributeError` (`preprocessTriple`) on every graph; with that fixed alone,
+  the library's total order of predicates and objects would have been skipped
+  without an error, as rdflib 8 no longer calls `sortProperties`. The library
+  now extends `OrigTurtleSerializer` where rdflib has it and defines each hook
+  under both names.
+
+### Changed
+
+- Under rdflib 8 the fallback path keeps a graph's base in more cases. rdflib
+  8 relativizes an IRI only where the reference resolves back to it, so a base
+  ending in `#`, `?` or a partial path segment no longer changes an IRI, and
+  the round-trip check now keeps the `@base` directive where under rdflib 7 it
+  drops it. Every absolute IRI survives either way. Under rdflib 7 nothing
+  changes.
+
+### Dependencies
+
+- rdflib 8 is tested in CI, against a pinned build until it is published.
+
 ## [0.4.0] - 2026-09-11
 
 **Output bytes change** for graphs that take the rdflib fallback path and carry
