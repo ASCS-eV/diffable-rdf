@@ -90,7 +90,7 @@ jobs:
       - name: Install against rdflib 8
         run: |
           uv venv --clear
-          uv pip install -e . "pytest>=8.0" "rdflib @ git+https://github.com/ASCS-eV/rdflib.git@envited-x/2026.11.25"
+          uv pip install -e . "pytest>=8.0" "rdflib @ git+https://github.com/ASCS-eV/rdflib.git@envited-x/2026.11.27.1"
 
       - name: Show what resolved
         run: uv pip list

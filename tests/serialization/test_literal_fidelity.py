@@ -11,6 +11,7 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.namespace import RDF, XSD
 
 from diffable_rdf import canonicalize_rdf_graph, deterministic_turtle
+from diffable_rdf.literals import written_datatype
 
 EX = Namespace("http://example.org/")
 FALLBACK_BASE = "https://consumer.example/base/"
@@ -388,3 +389,57 @@ def test_turtle_alias_fallbacks_preserve_literal_quote_boundaries(
         base_iri=FALLBACK_BASE,
         uses_long_strings="\n" in line_ending,
     )
+
+
+def _implied_datatype_graph(subject: URIRef) -> Graph:
+    """Literals whose datatypes an rdflib following RDF 1.1 implies."""
+    graph = Graph()
+    graph.bind("ex", EX)
+    for literal in (
+        Literal("1"),
+        Literal("1", lang="en"),
+        Literal("1", datatype=XSD.integer),
+        Literal("b", lang="de"),
+    ):
+        graph.add((subject, EX.p, literal))
+    return graph
+
+
+def test_written_datatype_leaves_out_only_implied_datatypes() -> None:
+    typed_string = Literal("a", datatype=XSD.string)
+
+    assert written_datatype(Literal("a")) is None
+    assert written_datatype(Literal("a", lang="en")) is None
+    assert written_datatype(Literal("1", datatype=XSD.integer)) == XSD.integer
+    # Where rdflib makes "a"^^xsd:string the simple literal, it is written as one.
+    assert (written_datatype(typed_string) is None) == (typed_string == Literal("a"))
+
+
+def test_implied_datatypes_are_not_written_and_keep_the_literal_order() -> None:
+    """An rdflib that gives every literal a datatype writes the same bytes.
+
+    RDF 1.1 Concepts and Abstract Syntax, section 3.3, gives a simple literal
+    the datatype xsd:string and a language-tagged one rdf:langString. Neither
+    is written, and literals sort as they do when rdflib leaves both unset.
+    """
+    assert deterministic_turtle(_implied_datatype_graph(EX.s)) == (
+        "@prefix ex: <http://example.org/> .\n"
+        "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
+        "\n"
+        'ex:s ex:p "1",\n'
+        '        "1"^^xsd:integer,\n'
+        '        "1"@en,\n'
+        '        "b"@de .\n'
+    )
+
+
+@pytest.mark.parametrize("output_format", ["turtle", "n3", "trig", "xml", "json-ld"])
+def test_fallback_does_not_write_implied_datatypes(output_format: str) -> None:
+    """The relative-IRI fallback writes no datatype a literal only implies."""
+    result = canonicalize_rdf_graph(
+        _implied_datatype_graph(URIRef("relative/s")), output_format=output_format
+    )
+
+    assert "XMLSchema#string" not in result
+    assert "xsd:string" not in result
+    assert "langString" not in result

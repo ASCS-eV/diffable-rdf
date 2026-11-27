@@ -52,6 +52,7 @@ from rdflib.compare import to_canonical_graph
 from .expanded_jsonld import _is_absolute_iri, serialize_expanded_jsonld
 from .graph_input import _require_single_graph
 from .jsonld import deterministic_json
+from .literals import written_datatype
 from .namespaces import bind_source_namespaces, prepare_namespaces
 from .wl import wl_relabel_quads
 
@@ -631,8 +632,8 @@ def _iri_sets(graph: rdflib.Graph) -> tuple[set[str], set[str]]:
         for term in triple:
             if isinstance(term, rdflib.URIRef):
                 direct.add(str(term))
-            elif isinstance(term, rdflib.Literal) and term.datatype is not None:
-                datatypes.add(str(term.datatype))
+            elif isinstance(term, rdflib.Literal) and (datatype := written_datatype(term)) is not None:
+                datatypes.add(str(datatype))
     # RDF 1.1 treats a plain string and an xsd:string literal as the same
     # literal. Keep that allowance local to datatype positions: an
     # xsd:string URIRef used directly in a triple remains significant.
