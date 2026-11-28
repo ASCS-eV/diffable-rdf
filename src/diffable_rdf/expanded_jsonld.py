@@ -16,6 +16,7 @@ from rdflib import BNode, Literal, URIRef
 from rdflib.term import Node
 
 from .jsonld import deterministic_json
+from .literals import written_datatype
 
 _ABSOLUTE_IRI = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _RESERVED_JSONLD_IDENTIFIER = re.compile(r"^@[A-Za-z]+$")
@@ -82,8 +83,8 @@ def _object_value(term: Node) -> dict[str, str]:
     value = {"@value": str(term)}
     if term.language is not None:
         value["@language"] = term.language
-    elif term.datatype is not None:
-        datatype = _iri_identifier(term.datatype, "datatype", require_absolute=True)
+    elif (written := written_datatype(term)) is not None:
+        datatype = _iri_identifier(written, "datatype", require_absolute=True)
         value["@type"] = datatype
     return value
 

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from rdflib import Graph, Literal, URIRef
 
+from .literals import written_datatype
+
 
 def bind_source_namespaces(target: Graph, source: Graph) -> None:
     """Install the source graph's bindings, reserving their names.
@@ -52,8 +54,8 @@ def prepare_namespaces(target: Graph, source: Graph) -> None:
         for term in (subject, predicate, object_):
             if isinstance(term, URIRef):
                 iris.add(str(term))
-            elif isinstance(term, Literal) and term.datatype is not None:
-                iris.add(str(term.datatype))
+            elif isinstance(term, Literal) and (datatype := written_datatype(term)) is not None:
+                iris.add(str(datatype))
 
     # rdflib normally creates ns1/ns2/... while traversing the graph, whose
     # iteration order varies between processes. Force that discovery to occur

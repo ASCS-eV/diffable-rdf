@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 # already run RDFC-1.0 themselves can reuse it without this serializer.
 from diffable_rdf.wl import wl_blank_node_labels as _wl_signatures  # noqa: E402
 from diffable_rdf.graph_input import _require_single_graph  # noqa: E402
+from diffable_rdf.literals import written_datatype  # noqa: E402
 from diffable_rdf.namespaces import bind_source_namespaces  # noqa: E402
 
 
@@ -123,7 +124,7 @@ class _LiteralPreservingTurtleSerializer(_CompactTurtleSerializer):
         if isinstance(node, URIRef):
             return (1, str(node), "", "")
         if isinstance(node, Literal):
-            return (2, str(node), node.language or "", str(node.datatype or ""))
+            return (2, str(node), node.language or "", str(written_datatype(node) or ""))
         return (3, str(node), "", "")
 
     def _triple_sort_key(self, triple) -> tuple:
@@ -176,7 +177,8 @@ class _LiteralPreservingTurtleSerializer(_CompactTurtleSerializer):
         quoted = _quote_turtle_string(str(node))
         if node.language:
             return f"{quoted}@{node.language}"
-        if node.datatype is None:
+        datatype = written_datatype(node)
+        if datatype is None:
             return quoted
         # gen_prefix=False: this runs in the write phase, after the @prefix
         # block has been emitted, so a prefix invented here would be used and
@@ -184,8 +186,8 @@ class _LiteralPreservingTurtleSerializer(_CompactTurtleSerializer):
         # its complete IRI, which is also what the inherited serializer does:
         # it generates no prefix for a datatype in any position.
         get_pname = getattr(self, "get_pname", None) or self.getQName
-        pname = get_pname(node.datatype, False)
-        return f"{quoted}^^{pname or f'<{node.datatype}>'}"
+        pname = get_pname(datatype, False)
+        return f"{quoted}^^{pname or f'<{datatype}>'}"
 
 
 class _NoCollectionTurtleSerializer(_LiteralPreservingTurtleSerializer):

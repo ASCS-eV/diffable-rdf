@@ -12,6 +12,33 @@ about it.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-27
+
+**Output bytes unchanged under rdflib 7.** This release keeps the library's
+output the same under an rdflib that gives every literal a datatype, as rdflib
+8 will.
+
+### Fixed
+
+- Under an rdflib that follows RDF 1.1 Concepts and Abstract Syntax, section
+  3.3, where a simple literal has the datatype `xsd:string` and a
+  language-tagged literal `rdf:langString`, the library no longer writes those
+  datatypes. It wrote `"x"^^xsd:string` for every simple literal, declared the
+  `xsd:` prefix for it, typed it in expanded JSON-LD, sorted literals by the
+  implied datatype, and its round-trip check failed. A literal now carries a
+  datatype in the output only where it is not implied.
+
+### Changed
+
+- Under such an rdflib, a literal given the datatype `xsd:string` explicitly
+  is the simple literal, so the fallback path writes it as `"x"`. Under rdflib
+  7, which keeps the two apart, nothing changes.
+
+### Dependencies
+
+- The rdflib 8 CI job runs against the ASCS-eV fork tag
+  `envited-x/2026.11.27.1`, which carries RDFLib/rdflib#3757.
+
 ## [0.4.1] - 2026-11-26
 
 **Output bytes unchanged.** This release makes the library work with rdflib 8,
